@@ -11,9 +11,9 @@ window.BB19_CONFIG = Object.freeze({
   denOfTemptation: {
     weeks: [1,2,3],
     temptations: [
-      {id:"pendant", name:"Pendant of Protection", description:"Immunity from the next three evictions. The holder also creates a nomination curse."},
-      {id:"ring", name:"Ring of Replacement", description:"The holder may replace one randomly selected POV player with themselves. The curse creates Ve-Toad punishments."},
-      {id:"hex", name:"Halting Hex", description:"The holder can cancel one of the next four evictions. Accepting it unleashes the Temptation Competition."}
+      {id:"pendant", name:"Pendant of Protection", description:"Immunity from the next three evictions. Accepting it curses another Houseguest, who must volunteer as a third nominee during one of the next three weeks."},
+      {id:"ring", name:"Ring of Replacement", description:"The holder may replace one of the three randomly selected Veto players with themselves. Three other Houseguests are forced to wear Ve-Toad costumes for the rest of the week."},
+      {id:"hex", name:"Halting Hex", description:"The holder can stop one of the next four evictions. Accepting it unleashes the Temptation Competition for Weeks 5–7."}
     ]
   },
   firstTemptation: {

@@ -477,6 +477,7 @@
   function revealWeek(){if(pointer<0)return;const w=history[pointer].week;let i=pointer;while(i+1<history.length&&history[i+1].week===w)i++;revealTo(i)}
 
   function startSeason(){
+    ensureSocialState();
     const missing=state.houseguests.filter(h=>!h.firstName.trim()||!h.lastName.trim());
     if(missing.length){toastMsg("Every houseguest needs a first and last name.");return;}
         syncLiveFeedSetupToState();
@@ -496,6 +497,20 @@
   function renderTeams(){teamsGrid.innerHTML="";}
   function teamOptions(){return state.houseguests.map(h=>`<option value="${h.id}">${esc(displayName(h))}</option>`).join("");}
 
+  function ensureSocialState(){
+    state.relationships=state.relationships||{};
+    state.alliances=Array.isArray(state.alliances)?state.alliances:[];
+    state.houseguests=(state.houseguests||[]).map(h=>({...h,allianceIds:Array.isArray(h.allianceIds)?h.allianceIds:[]}));
+    state.houseguests.forEach(h=>{
+      if(!state.relationships[h.id]) state.relationships[h.id]={};
+      state.houseguests.forEach(other=>{
+        if(other.id!==h.id && !state.relationships[h.id][other.id]){
+          state.relationships[h.id][other.id]=GameState.emptyRelationships();
+        }
+      });
+    });
+  }
+
   function ensureRelationship(a,b){
     if(!state.relationships[a])state.relationships[a]={};
     if(!state.relationships[a][b])state.relationships[a][b]=GameState.emptyRelationships();
@@ -503,6 +518,7 @@
     return state.relationships[a][b];
   }
   function renderRelationships(){
+    ensureSocialState();
     if(!relationshipsGrid)return;
     const ids=state.houseguests.map(h=>h.id);
     if(ids.length<2){relationshipsGrid.innerHTML="<p>Add at least two houseguests.</p>";return;}
@@ -519,6 +535,7 @@
       <div class="relationship-selects"><label>Houseguest A<select data-rel-a>${teamOptions()}</select></label><label>Houseguest B<select data-rel-b>${teamOptions()}</select></label></div>
       <div class="relationship-quick"><strong>Quick relationship</strong><div class="relationship-preset-grid">${presetButtons}</div></div>
       <div class="relationship-advanced"><div class="relationship-advanced-heading"><strong>Detailed relationship</strong><span>Optional</span></div><label class="relationship-type-field">Relationship Type<select data-rel-type>${typeOptions}</select></label><label class="relationship-check"><input type="checkbox" data-rel-both checked> Apply changes to both directions</label><div class="relationship-sliders">${REL_KEYS.map(k=>`<label><span>${REL_LABELS[k]} <b data-rel-value="${k}">${r[k]}</b></span><input type="range" min="0" max="100" value="${r[k]}" data-rel-key="${k}"></label>`).join("")}</div><label class="relationship-notes-field">Relationship Notes<textarea data-rel-notes rows="3" placeholder="Optional: former roommates, secret friendship, old argument, crush, family connection, etc.">${esc(r.notes||"")}</textarea></label></div>
+      <div class="relationship-actions"><button type="button" class="primary" data-save-relationship>Save Relationship</button><span class="relationship-save-status" data-rel-status>Changes are saved to this season setup.</span></div>
       <p class="relationship-help">Tip: use a preset for the broad relationship, then fine-tune trust, loyalty, rivalry or attraction if the story needs more nuance.</p>
     </div>`;
     const aSel=relationshipsGrid.querySelector('[data-rel-a]'),bSel=relationshipsGrid.querySelector('[data-rel-b]');
@@ -543,6 +560,7 @@
     state.season.relationshipsCustomized=true;
   }
   function renderAlliancesSetup(){
+    ensureSocialState();
     if(!allianceSetup)return;
     const alliances=state.alliances||[];
     const memberPicker=state.houseguests.map(h=>`<label class="member-picker-card"><input type="checkbox" data-new-alliance-member="${h.id}"><span class="member-picker-portrait">${portrait(h,"alliance-picker-portrait")}</span><span>${esc(displayName(h))}</span></label>` ).join("");
@@ -592,7 +610,7 @@
     ensureFeedSettings();
     [["feedBackstories","backstories"],["feedPriorRelationships","priorRelationships"],["feedPersonalities","personalities"],["feedConflictsAndRomance","conflictsAndRomance"],["feedRecurringTopics","recurringTopics"],["feedInstructions","feedInstructions"]].forEach(([id,key])=>{const el=$(id);if(el)state.season.liveFeedProfile[key]=el.value;});
   }
-  function refreshSetup(){renderCast();renderTeams();renderRelationships();renderAlliancesSetup();renderLiveFeedSetup();validate();$("seasonName").value=state.season.name;$("themeUrl").value=state.season.themeUrl||"";$("logoUrl").value=state.season.logoUrl||"";}
+  function refreshSetup(){ensureSocialState();renderCast();renderTeams();renderRelationships();renderAlliancesSetup();renderLiveFeedSetup();validate();$("seasonName").value=state.season.name;$("themeUrl").value=state.season.themeUrl||"";$("logoUrl").value=state.season.logoUrl||"";}
   function validate(){const ok=state.houseguests.every(h=>h.firstName.trim()&&h.lastName.trim());validity.textContent=ok?"Cast ready":"Names required";validity.classList.toggle("invalid",!ok);}
   function assignDemoTeams(){}
   function loadDemo(){state=GameState.createInitialState(BB19_CONFIG);state.season.name="Big Brother 19 — Custom Demo";state.houseguests.forEach((h,i)=>{[h.firstName,h.lastName]=demoNames[i];h.displayName=h.firstName;h.ratings.general=45+(i*7)%45;h.ratings.physical=40+(i*11)%55;h.ratings.mental=42+(i*13)%53;h.ratings.social=45+(i*9)%50;h.ratings.strategic=40+(i*17)%58;});assignDemoTeams();refreshSetup();toastMsg("Demo cast loaded.");}
@@ -621,6 +639,15 @@
   function imageFileToDataUrl(file,maxSize=640,quality=0.82){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=()=>reject(reader.error||new Error("File read failed"));reader.onload=()=>{const img=new Image();img.onerror=()=>reject(new Error("Image decode failed"));img.onload=()=>{const scale=Math.min(1,maxSize/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL("image/jpeg",quality));};img.src=reader.result;};reader.readAsDataURL(file);});}
 
   relationshipsGrid?.addEventListener("click",e=>{
+    const save=e.target.closest('[data-save-relationship]');
+    if(save){
+      ensureSocialState();
+      state.season.relationshipsCustomized=true;
+      const status=relationshipsGrid.querySelector('[data-rel-status]');
+      if(status){status.textContent="Relationship saved ✓";setTimeout(()=>{if(status.isConnected)status.textContent="Changes are saved to this season setup.";},1400);}
+      toastMsg("Relationship saved.");
+      return;
+    }
     const preset=e.target.closest('[data-rel-preset]');
     if(!preset)return;
     const a=relationshipsGrid.dataset.a,b=relationshipsGrid.dataset.b,both=relationshipsGrid.querySelector('[data-rel-both]')?.checked;
@@ -655,7 +682,10 @@
     if(!raw){ for(const key of LEGACY_STORAGE_KEYS){ raw=localStorage.getItem(key); if(raw) break; } }
     if(!raw)return;
     const x=JSON.parse(raw); if(!x.houseguests)return;
-    x.houseguests.forEach(h=>{h.displayName=String(h.displayName||h.firstName||"").trim()||h.firstName||"";}); state=x; state.intendedTarget=state.intendedTarget||null; state.targetHistory=state.targetHistory||[]; state.backdoorTargetId=state.backdoorTargetId||null;
+    x.houseguests.forEach(h=>{h.displayName=String(h.displayName||h.firstName||"").trim()||h.firstName||"";h.allianceIds=Array.isArray(h.allianceIds)?h.allianceIds:[];});
+    x.relationships=x.relationships||{};
+    x.alliances=Array.isArray(x.alliances)?x.alliances:[];
+    state=x; ensureSocialState(); state.intendedTarget=state.intendedTarget||null; state.targetHistory=state.targetHistory||[]; state.backdoorTargetId=state.backdoorTargetId||null;
     history=state.history||[];
     const saved=Number(localStorage.getItem(REVEAL_KEY));
     if(history.length){pointer=Number.isFinite(saved)?saved:-1;setupView.classList.add("hidden");seasonView.classList.remove("hidden");updateSeasonUI();}

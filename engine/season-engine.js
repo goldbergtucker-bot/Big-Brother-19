@@ -11,7 +11,25 @@
   function bond(s,a,b){const r=rel(s,a,b);return (r.friendship*.30+r.trust*.25+r.loyalty*.15+r.respect*.20+r.attraction*.10-r.rivalry*.35);}
   function ally(s,a,b){return (s.alliances||[]).some(x=>x.active!==false&&x.memberIds.includes(a.id)&&x.memberIds.includes(b.id));}
   function snapshot(s){return {phase:s.phase,week:s.week,currentHOH:s.currentHOH,originalHOH:s.originalHOH,secretHOH:s.secretHOH,dethronedHOH:s.dethronedHOH,nominees:[...s.nominees],intendedTarget:s.intendedTarget,targetHistory:[...(s.targetHistory||[])],backdoorTargetId:s.backdoorTargetId||null,backdoorPlanActive:!!s.backdoorPlanActive,povPlayers:[...s.povPlayers],vetoWinners:[...s.vetoWinners],evictionVotes:[...(s.evictionVotes||[])],evicted:[...s.evicted],jury:[...s.jury],powers:(s.powers||[]).map(x=>({...x})),temptations:[...(s.temptations||[])],firstTemptation:s.firstTemptation?{...s.firstTemptation}:null,treeOfTemptation:s.treeOfTemptation?{...s.treeOfTemptation}:null,battleBack:s.battleBack?JSON.parse(JSON.stringify(s.battleBack)):null,houseguests:s.houseguests.map(h=>({id:h.id,slot:h.slot,firstName:h.firstName,lastName:h.lastName,portraitUrl:h.portraitUrl,gender:h.gender,active:h.active,safe:h.safe,nominated:h.nominated,juryMember:h.juryMember,evicted:h.evicted,selfEvicted:!!h.selfEvicted,friendshipBracelet:!!h.friendshipBracelet,placement:h.placement}))};}
-  function eventData(s,e){const d={...(e.data||{})};if(e.type==='eviction-voting'){d.votes=e.votes||[];d.voteCounts=e.voteCounts||{};d.nomineeIds=[...(e.nomineeIds||s.nominees||[])];}if(e.type==='eviction'){d.votes=e.votes||s.evictionVotes||[];d.voteCounts=e.voteCounts||{};d.evictedVoteCount=e.evictedVoteCount;d.stayVoteCount=e.stayVoteCount;d.tieBreakVoteId=e.tieBreakVoteId||null;}if(e.type==='veto-ceremony'){d.vetoUsed=!!e.vetoUsed;d.savedId=e.savedId||null;d.replacementId=e.replacementId||null;d.finalNomineeIds=[...s.nominees];}return d;}
+  function eventData(s,e){
+    const d={...(e.data||{})};
+    // Preserve presentation fields that are stored on the history event itself.
+    // Premiere events need these IDs available to the event renderer so their
+    // portraits/cards can be resolved from the event snapshot.
+    if(e.winnerId!=null)d.winnerId=e.winnerId;
+    if(e.hohId!=null)d.hohId=e.hohId;
+    if(e.evictedId!=null)d.evictedId=e.evictedId;
+    if(e.runnerUpId!=null)d.runnerUpId=e.runnerUpId;
+    if(e.thirdPlaceId!=null)d.thirdPlaceId=e.thirdPlaceId;
+    if(e.entrantId!=null)d.entrantId=e.entrantId;
+    if(e.recipientIds)d.recipientIds=[...e.recipientIds];
+    if(e.participants)d.participants=[...e.participants];
+    if(e.nomineeIds)d.nomineeIds=[...e.nomineeIds];
+    if(e.type==='eviction-voting'){d.votes=e.votes||[];d.voteCounts=e.voteCounts||{};d.nomineeIds=[...(e.nomineeIds||s.nominees||[])];}
+    if(e.type==='eviction'){d.votes=e.votes||s.evictionVotes||[];d.voteCounts=e.voteCounts||{};d.evictedVoteCount=e.evictedVoteCount;d.stayVoteCount=e.stayVoteCount;d.tieBreakVoteId=e.tieBreakVoteId||null;}
+    if(e.type==='veto-ceremony'){d.vetoUsed=!!e.vetoUsed;d.savedId=e.savedId||null;d.replacementId=e.replacementId||null;d.finalNomineeIds=[...s.nominees];}
+    return d;
+  }
   function log(s,e){const r={id:s.history.length+1,...e};r.snapshot=snapshot(s);r.data=eventData(s,r);s.history.push(r);}
   function ensureState(s){s.targetHistory=s.targetHistory||[];s.powers=s.powers||[];s.temptations=s.temptations||[];s.jury=s.jury||[];s.evicted=s.evicted||[];s.nominees=s.nominees||[];s.povPlayers=s.povPlayers||[];s.vetoWinners=s.vetoWinners||[];s.evictionVotes=s.evictionVotes||[];s.alliances=s.alliances||[];}
   function resetFlags(s){s.houseguests.forEach(h=>{h.safe=false;h.nominated=false;});}
@@ -104,8 +122,16 @@
   }
   function runDenOfTemptation(s,week){
     const eligible=living(s).filter(h=>!h.denUsed);if(!eligible.length)return null;
-    // Simulate America's choice as a strategic/social prominence selection, but keep the temptation itself probabilistic.
-    const chosen=eligible.sort((a,b)=>((b.ratings?.social||50)+(b.ratings?.general||50)+Math.random()*25)-((a.ratings?.social||50)+(a.ratings?.general||50)+Math.random()*25))[0];
+    // BB19 custom rule: the 17th Houseguest is ALWAYS the Week 1 Pendant of
+    // Protection recipient. Later Den of Temptation selections remain simulated.
+    let chosen;
+    if(week===1){
+      const entrant=hg(s,"hg-17");
+      chosen=(entrant&&entrant.active&&!entrant.denUsed)?entrant:null;
+    }
+    if(!chosen){
+      chosen=eligible.sort((a,b)=>((b.ratings?.social||50)+(b.ratings?.general||50)+Math.random()*25)-((a.ratings?.social||50)+(a.ratings?.general||50)+Math.random()*25))[0];
+    }
     chosen.denUsed=true;
     const cfg=window.BB19_CONFIG.denOfTemptation.temptations[week-1];
     let accepted=true;
@@ -295,6 +321,9 @@
     s.phase="in-season";
     resetFlags(s);
     runFirstHOH(s);
+    // Week 1 Den of Temptation is deterministic in this custom format:
+    // the 17th Houseguest always receives the Pendant of Protection.
+    runDenOfTemptation(s,1);
     runNominations(s,1);
     runFirstWeekSelfEviction(s);
     const players=selectPOVPlayers(s,1);

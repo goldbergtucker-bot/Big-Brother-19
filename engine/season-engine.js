@@ -16,7 +16,11 @@
   function ensureState(s){s.targetHistory=s.targetHistory||[];s.powers=s.powers||[];s.temptations=s.temptations||[];s.jury=s.jury||[];s.evicted=s.evicted||[];s.nominees=s.nominees||[];s.povPlayers=s.povPlayers||[];s.vetoWinners=s.vetoWinners||[];s.evictionVotes=s.evictionVotes||[];s.alliances=s.alliances||[];}
   function resetFlags(s){s.houseguests.forEach(h=>{h.safe=false;h.nominated=false;});}
   function chooseFirstTemptation(s){
-    const players=living(s);
+    // The custom BB19 format begins with the first 16 houseguests.
+    // Slot 17 is editable during setup, but does not enter the house until
+    // the Garden of Temptation has concluded.
+    const players=living(s).filter(h=>h.slot!==17);
+    const entrant=hg(s, 'hg-17');
     const scored=players.map(h=>{
       const risk=(h.ratings?.general||50)*.18+(h.ratings?.strategic||50)*.18+(h.ratings?.social||50)*.08+(h.ratings?.physical||50)*.08+Math.random()*58;
       return {h,score:risk};
@@ -26,6 +30,15 @@
     // The actual BB19 consequence was that the money-taker had to throw the first HOH.
     winner.mustThrowFirstHOH=true;
     log(s,{week:1,phase:'premiere',type:'temptation-25000',winnerId:winner.id,participants:players.map(p=>p.id),title:'Garden of Temptation — $25,000',lines:[`${displayName(winner)} was the first houseguest to press the button and takes $25,000.`,`The $25,000 temptation was guaranteed to be taken; the race determined who pressed first.`,`As the personal consequence, ${displayName(winner)} must throw the first HOH competition.`]});
+    // The 17th houseguest is the special entrant created by the Garden of
+    // Temptation. They are not part of the button race and join immediately
+    // after the $25,000 is claimed, before the first HOH.
+    if(entrant){
+      entrant.active=true;
+      entrant.safe=false;
+      entrant.nominated=false;
+      log(s,{week:1,phase:'premiere',type:'houseguest-entry',entrantId:entrant.id,participants:[entrant.id],title:'The 17th Houseguest Enters',lines:[`${displayName(entrant)} enters the Big Brother house as the 17th houseguest.`,`The opening Garden of Temptation is complete, and the full 17-person cast is now in the game.`]});
+    }
     return winner;
   }
   function runHitTheRoad(s){
@@ -201,7 +214,7 @@
     s.finale={winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalHohId:finalHoh.id,votes:tally,jurySize:jurors.length,prize:750000,runnerUpPrize:75000,americasFavoritePrize:50000,americasFavoriteId:afpId};s.phase='complete';log(s,{week:'Final',phase:'finale',type:'winner',winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalistIds:[winnerId,runnerId],afpId,title:`${displayName(hg(s,winnerId))} Wins Big Brother!`,lines:[`By a vote of ${tally[winnerId]}-${tally[runnerId]}, ${displayName(hg(s,winnerId))} wins Big Brother.`,`${displayName(hg(s,runnerId))} finishes as the Runner-Up.`,`America's Favorite Player: ${displayName(hg(s,afpId))}.`]});
   }
   function simulateSeason(s,config){
-    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.temptationCompetitionUnlocked=false;s.houseguests.forEach(h=>{h.active=true;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
+    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.temptationCompetitionUnlocked=false;s.houseguests.forEach(h=>{h.active=h.slot!==17;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
     runPremiere(s);let week=2,guard=0;while(living(s).length>3&&week<=18&&guard<24){runCycle(s,week,1);week++;guard++;}runFinale(s);if(window.LiveFeeds?.addToSeason)window.LiveFeeds.addToSeason(s);return s;
   }
   window.SeasonEngine={simulateSeason,displayName,ordinal};

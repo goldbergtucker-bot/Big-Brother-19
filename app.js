@@ -29,6 +29,17 @@
   const REL_KEYS = ["friendship","trust","loyalty","rivalry","respect","attraction"];
   const REL_LABELS = {friendship:"Friendship",trust:"Trust",loyalty:"Loyalty",rivalry:"Rivalry",respect:"Respect",attraction:"Attraction"};
   const REL_TYPES = ["Unspecified","Showmance","Bromance","Best Friends","Close Friends","Allies","Rivalry","Mentor / Mentee","Family","Frenemies","Secret Pair","Other"];
+  const REL_PRESETS = {
+    "Neutral": {type:"Unspecified", friendship:50, trust:50, loyalty:50, rivalry:0, respect:50, attraction:0},
+    "Close Friends": {type:"Close Friends", friendship:82, trust:76, loyalty:78, rivalry:5, respect:82, attraction:5},
+    "Strong Allies": {type:"Allies", friendship:68, trust:82, loyalty:88, rivalry:5, respect:76, attraction:0},
+    "Best Friends": {type:"Best Friends", friendship:94, trust:90, loyalty:94, rivalry:2, respect:88, attraction:8},
+    "Showmance": {type:"Showmance", friendship:88, trust:76, loyalty:82, rivalry:4, respect:78, attraction:92},
+    "Bromance": {type:"Bromance", friendship:88, trust:82, loyalty:86, rivalry:4, respect:84, attraction:4},
+    "Rivalry": {type:"Rivalry", friendship:18, trust:12, loyalty:8, rivalry:92, respect:36, attraction:0},
+    "Frenemies": {type:"Frenemies", friendship:58, trust:34, loyalty:28, rivalry:62, respect:58, attraction:8},
+    "Secret Pair": {type:"Secret Pair", friendship:78, trust:86, loyalty:90, rivalry:3, respect:74, attraction:10}
+  };
   const ALLIANCE_TYPES = ["Majority Alliance","Core Alliance","Final Two","Final Three","Girls' Alliance","Guys' Alliance","Secret Alliance","Side Alliance","Team","Custom"];
 
   const esc = v => String(v ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;", "'":"&#039;"}[c]));
@@ -501,9 +512,25 @@
     const r=ensureRelationship(currentA,currentB);
     const typeOptions=REL_TYPES.map(t=>`<option value="${esc(t)}" ${r.type===t?"selected":""}>${esc(t)}</option>`).join("");
     const a=byId(null,currentA),b=byId(null,currentB);
-    relationshipsGrid.innerHTML=`<div class="relationship-editor"><div class="relationship-pair-preview"><div class="relationship-person">${portrait(a,"relationship-portrait")}<strong>${esc(name(a))}</strong></div><div class="relationship-connector">↔</div><div class="relationship-person">${portrait(b,"relationship-portrait")}<strong>${esc(name(b))}</strong></div></div><div class="relationship-selects"><label>Houseguest A<select data-rel-a>${teamOptions()}</select></label><label>Houseguest B<select data-rel-b>${teamOptions()}</select></label></div><label class="relationship-type-field">Relationship Type<select data-rel-type>${typeOptions}</select></label><label class="relationship-check"><input type="checkbox" data-rel-both checked> Apply values to both directions</label><div class="relationship-sliders">${REL_KEYS.map(k=>`<label><span>${REL_LABELS[k]} <b data-rel-value="${k}">${r[k]}</b></span><input type="range" min="0" max="100" value="${r[k]}" data-rel-key="${k}"></label>`).join("")}</div><p class="relationship-help">Choose a relationship type such as Showmance, Bromance, Best Friends or Rivalry, then fine-tune the six relationship ratings. The type is saved with the relationship and can influence how the relationship is presented.</p></div>`;
+    const presetButtons=Object.keys(REL_PRESETS).map(k=>`<button type="button" class="relationship-preset" data-rel-preset="${esc(k)}">${esc(k)}</button>`).join("");
+    relationshipsGrid.innerHTML=`<div class="relationship-editor">
+      <div class="relationship-intro"><div><span class="eyebrow">EASY SETUP · DETAILED CONTROL</span><h3>How do these two Houseguests know each other?</h3><p>Start with one quick preset, then adjust anything you want. You can make every relationship simple or highly specific.</p></div></div>
+      <div class="relationship-pair-preview"><div class="relationship-person">${portrait(a,"relationship-portrait")}<strong>${esc(name(a))}</strong></div><div class="relationship-connector">↔</div><div class="relationship-person">${portrait(b,"relationship-portrait")}<strong>${esc(name(b))}</strong></div></div>
+      <div class="relationship-selects"><label>Houseguest A<select data-rel-a>${teamOptions()}</select></label><label>Houseguest B<select data-rel-b>${teamOptions()}</select></label></div>
+      <div class="relationship-quick"><strong>Quick relationship</strong><div class="relationship-preset-grid">${presetButtons}</div></div>
+      <div class="relationship-advanced"><div class="relationship-advanced-heading"><strong>Detailed relationship</strong><span>Optional</span></div><label class="relationship-type-field">Relationship Type<select data-rel-type>${typeOptions}</select></label><label class="relationship-check"><input type="checkbox" data-rel-both checked> Apply changes to both directions</label><div class="relationship-sliders">${REL_KEYS.map(k=>`<label><span>${REL_LABELS[k]} <b data-rel-value="${k}">${r[k]}</b></span><input type="range" min="0" max="100" value="${r[k]}" data-rel-key="${k}"></label>`).join("")}</div><label class="relationship-notes-field">Relationship Notes<textarea data-rel-notes rows="3" placeholder="Optional: former roommates, secret friendship, old argument, crush, family connection, etc.">${esc(r.notes||"")}</textarea></label></div>
+      <p class="relationship-help">Tip: use a preset for the broad relationship, then fine-tune trust, loyalty, rivalry or attraction if the story needs more nuance.</p>
+    </div>`;
     const aSel=relationshipsGrid.querySelector('[data-rel-a]'),bSel=relationshipsGrid.querySelector('[data-rel-b]');
     aSel.value=currentA;bSel.value=currentB;
+  }
+  function applyRelationshipPreset(a,b,presetName,both){
+    const preset=REL_PRESETS[presetName]; if(!preset)return;
+    const r=ensureRelationship(a,b);
+    REL_KEYS.forEach(k=>{r[k]=preset[k];}); r.type=preset.type;
+    if(both){const rr=ensureRelationship(b,a);REL_KEYS.forEach(k=>{rr[k]=preset[k];});rr.type=preset.type;rr.notes=r.notes||"";}
+    state.season.relationshipsCustomized=true;
+    renderRelationships();
   }
   function setRelationshipType(a,b,type,both){
     const r=ensureRelationship(a,b);r.type=type;
@@ -522,17 +549,25 @@
     const typeOptions=ALLIANCE_TYPES.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("");
     const customCards=alliances.filter(a=>a.custom).map(a=>{
       const members=a.memberIds.map(id=>{const h=byId(null,id);return h?`<div class="setup-alliance-member">${portrait(h,"alliance-mini-portrait")}<span>${esc(displayName(h))}</span></div>`:""}).join("");
-      return `<div class="setup-alliance"><div><strong>${esc(a.name)}</strong><small>${esc(a.type||"Custom")} · ${a.memberIds.length} members</small></div><div class="setup-alliance-members">${members}</div><button type="button" data-remove-alliance="${a.id}" class="danger-link">Remove</button></div>`;
+      const strength=Number(a.strength||70);
+      const secrecy=a.secrecy||"Public";
+      const goal=a.goal||"Game control";
+      return `<div class="setup-alliance"><div><strong>${esc(a.name)}</strong><small>${esc(a.type||"Custom")} · ${a.memberIds.length} members · ${esc(secrecy)}</small></div><div><div class="setup-alliance-members">${members}</div><div class="alliance-meta-line"><span>Strength: ${strength}/100</span><span>Goal: ${esc(goal)}</span></div></div><button type="button" data-remove-alliance="${a.id}" class="danger-link">Remove</button></div>`;
     }).join("");
-    allianceSetup.innerHTML=`<div class="alliance-create"><label>Alliance Name<input id="newAllianceName" placeholder="e.g. The Cookout"></label><label>Alliance Type<select id="newAllianceType">${typeOptions}</select></label><div class="member-picker">${memberPicker}</div><button id="addAllianceBtn" class="primary">+ Create Alliance</button></div><div class="custom-alliance-list">${customCards||"<p class=\"muted-note\">No custom alliances yet. Simulated alliances may still form during the season.</p>"}</div>`;
+    const goalOptions=["Game control","Keep the core safe","Target outsiders","Protect a specific player","Make jury together","Final 2 / Final 3","Short-term voting bloc","Other"].map(x=>`<option>${esc(x)}</option>`).join("");
+    allianceSetup.innerHTML=`<div class="alliance-create alliance-create-detailed"><div class="alliance-create-fields"><label>Alliance Name<input id="newAllianceName" placeholder="e.g. The Cookout"></label><label>Alliance Type<select id="newAllianceType">${typeOptions}</select></label><label>Alliance Goal<select id="newAllianceGoal">${goalOptions}</select></label><label>Strength <span id="newAllianceStrengthValue">70</span><input id="newAllianceStrength" type="range" min="0" max="100" value="70"></label><label class="alliance-check"><input id="newAllianceSecret" type="checkbox"> Keep this alliance secret</label></div><div class="member-picker-wrap"><strong>Select members</strong><span class="muted-note">Pick 2 or more. Members can belong to multiple alliances.</span><div class="member-picker">${memberPicker}</div></div><button id="addAllianceBtn" class="primary">+ Create Alliance</button></div><div class="custom-alliance-list">${customCards||"<p class=\"muted-note\">No custom alliances yet. Simulated alliances may still form during the season.</p>"}</div>`;
+    $("newAllianceStrength")?.addEventListener("input",e=>{const out=$("newAllianceStrengthValue");if(out)out.textContent=e.target.value;});
     $("addAllianceBtn")?.addEventListener("click",()=>{
       const allianceName=$("newAllianceName").value.trim();
       const allianceType=$("newAllianceType").value;
+      const goal=$("newAllianceGoal").value;
+      const strength=Number($("newAllianceStrength").value||70);
+      const secrecy=$("newAllianceSecret").checked?"Secret":"Public";
       const memberIds=[...allianceSetup.querySelectorAll('[data-new-alliance-member]:checked')].map(x=>x.dataset.newAllianceMember);
       if(!allianceName){toastMsg("Enter an alliance name.");return;}
       if(memberIds.length<2){toastMsg("Choose at least two members.");return;}
       const id=`custom-alliance-${Date.now()}`;
-      const a={id,name:allianceName,type:allianceType,memberIds,formedWeek:0,active:true,custom:true};
+      const a={id,name:allianceName,type:allianceType,memberIds,formedWeek:0,active:true,custom:true,strength,secrecy,goal};
       state.alliances.push(a);
       memberIds.forEach(id=>{const h=byId(null,id);if(h&&!h.allianceIds.includes(a.id))h.allianceIds.push(a.id);});
       renderAlliancesSetup();toastMsg(`${allianceName} created.`);
@@ -585,13 +620,22 @@
   castGrid.addEventListener("click",e=>{const b=e.target.closest('[data-clear-portrait]');if(!b)return;const h=state.houseguests.find(x=>x.id===b.dataset.clearPortrait);if(!h)return;h.portraitUrl="";refreshSetup();toastMsg("Picture removed.");});
   function imageFileToDataUrl(file,maxSize=640,quality=0.82){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=()=>reject(reader.error||new Error("File read failed"));reader.onload=()=>{const img=new Image();img.onerror=()=>reject(new Error("Image decode failed"));img.onload=()=>{const scale=Math.min(1,maxSize/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL("image/jpeg",quality));};img.src=reader.result;};reader.readAsDataURL(file);});}
 
+  relationshipsGrid?.addEventListener("click",e=>{
+    const preset=e.target.closest('[data-rel-preset]');
+    if(!preset)return;
+    const a=relationshipsGrid.dataset.a,b=relationshipsGrid.dataset.b,both=relationshipsGrid.querySelector('[data-rel-both]')?.checked;
+    applyRelationshipPreset(a,b,preset.dataset.relPreset,both);
+    toastMsg(`${preset.dataset.relPreset} relationship applied.`);
+  });
   relationshipsGrid?.addEventListener("change",e=>{
     const aSel=relationshipsGrid.querySelector('[data-rel-a]'),bSel=relationshipsGrid.querySelector('[data-rel-b]');
     if(e.target.matches('[data-rel-a],[data-rel-b]')){if(aSel.value===bSel.value){toastMsg("Choose two different houseguests.");return;}relationshipsGrid.dataset.a=aSel.value;relationshipsGrid.dataset.b=bSel.value;renderRelationships();return;}
     if(e.target.matches('[data-rel-type]')){const both=relationshipsGrid.querySelector('[data-rel-both]')?.checked;setRelationshipType(aSel.value,bSel.value,e.target.value,both);return;}
   });
   relationshipsGrid?.addEventListener("input",e=>{
-    if(!e.target.matches('[data-rel-key]'))return;const a=relationshipsGrid.dataset.a,b=relationshipsGrid.dataset.b,both=relationshipsGrid.querySelector('[data-rel-both]')?.checked;setRelationshipPair(a,b,e.target.dataset.relKey,e.target.value,both);const out=relationshipsGrid.querySelector(`[data-rel-value="${e.target.dataset.relKey}"]`);if(out)out.textContent=e.target.value;
+    const a=relationshipsGrid.dataset.a,b=relationshipsGrid.dataset.b,both=relationshipsGrid.querySelector('[data-rel-both]')?.checked;
+    if(e.target.matches('[data-rel-key]')){setRelationshipPair(a,b,e.target.dataset.relKey,e.target.value,both);const out=relationshipsGrid.querySelector(`[data-rel-value="${e.target.dataset.relKey}"]`);if(out)out.textContent=e.target.value;return;}
+    if(e.target.matches('[data-rel-notes]')){const r=ensureRelationship(a,b);r.notes=e.target.value;if(both)ensureRelationship(b,a).notes=e.target.value;state.season.relationshipsCustomized=true;}
   });
 
   $("seasonName").addEventListener("input",e=>state.season.name=e.target.value);$("themeUrl").addEventListener("input",e=>state.season.themeUrl=e.target.value);$("logoUrl").addEventListener("input",e=>state.season.logoUrl=e.target.value);
@@ -600,7 +644,7 @@
   $("loadDemoBtn").onclick=loadDemo;$("resetBtn").onclick=()=>{if(confirm("Reset the entire cast?")){state=GameState.createInitialState(BB19_CONFIG);refreshSetup();}};
   $("saveBtn").onclick=()=>{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));toastMsg("Cast, relationships and alliances saved.");};
   $("exportBtn").onclick=()=>{const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="bb19-custom-season.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
-  $("importInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(!x.houseguests||x.houseguests.length!==17)throw Error("Invalid 17-player cast");x.relationships=x.relationships||{};Object.values(x.relationships).forEach(row=>Object.values(row||{}).forEach(r=>{if(r&&!r.type)r.type="Unspecified";}));x.alliances=(x.alliances||[]).map(a=>({...a,type:a.type||"Custom"}));x.season=x.season||{};if(typeof x.season.liveFeedsEnabled!=="boolean")x.season.liveFeedsEnabled=true;x.season.liveFeedProfile={backstories:"",priorRelationships:"",personalities:"",conflictsAndRomance:"",recurringTopics:"",feedInstructions:"",...(x.season.liveFeedProfile||{})};x.houseguests.forEach(h=>{h.displayName=String(h.displayName||h.firstName||"").trim()||h.firstName||"";});state=x;refreshSetup();toastMsg("Season imported.");}catch(err){alert("Import failed: "+err.message)}e.target.value="";};
+  $("importInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(!x.houseguests||x.houseguests.length!==17)throw Error("Invalid 17-player cast");x.relationships=x.relationships||{};Object.values(x.relationships).forEach(row=>Object.values(row||{}).forEach(r=>{if(r&&!r.type)r.type="Unspecified";}));x.alliances=(x.alliances||[]).map(a=>({...a,type:a.type||"Custom",strength:Number(a.strength??70),secrecy:a.secrecy||"Public",goal:a.goal||"Game control"}));x.season=x.season||{};if(typeof x.season.liveFeedsEnabled!=="boolean")x.season.liveFeedsEnabled=true;x.season.liveFeedProfile={backstories:"",priorRelationships:"",personalities:"",conflictsAndRomance:"",recurringTopics:"",feedInstructions:"",...(x.season.liveFeedProfile||{})};x.houseguests.forEach(h=>{h.displayName=String(h.displayName||h.firstName||"").trim()||h.firstName||"";});state=x;refreshSetup();toastMsg("Season imported.");}catch(err){alert("Import failed: "+err.message)}e.target.value="";};
   $("simulateBtn").onclick=startSeason;$("resimulateBtn").onclick=startSeason;$("backToSetupBtn").onclick=resetSetup;
   previousBtn.onclick=previous;nextBtn.onclick=next;revealWeekBtn.onclick=revealWeek;revealSeasonBtn.onclick=()=>revealTo(history.length-1);
   timeline.addEventListener("click",e=>{const b=e.target.closest("button[data-index]");if(!b)return;const i=Number(b.dataset.index);if(i<=pointer+1)revealTo(i);});

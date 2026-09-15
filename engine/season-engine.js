@@ -232,7 +232,13 @@
   }
   function eviction(s,week,cycle=1){
     const noms=s.nominees.map(id=>hg(s,id)).filter(h=>h?.active);if(noms.length<2)return null;
-    let voters=living(s).filter(h=>!noms.some(n=>n.id===h.id));
+    // The HOH never casts a regular eviction vote. The only time the HOH
+    // affects the outcome is when the vote is tied and they exercise the
+    // tie-breaker. Excluding the HOH here also prevents Week 1 from inheriting
+    // the larger premiere voter pool and incorrectly producing 13 votes.
+    const hohId=s.currentHOH;
+    let voters=living(s).filter(h=>h.id!==hohId&&!noms.some(n=>n.id===h.id));
+
     // BB19 premiere exception: the 17th Houseguest does NOT vote in the
     // Hit the Road opening eviction because they already determined the eight
     // Friendship Bracelet recipients. They regain normal voting rights for

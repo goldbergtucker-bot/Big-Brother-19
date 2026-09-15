@@ -48,6 +48,12 @@
     return activeAlliances(state).some(a => a.memberIds.includes(aId) && a.memberIds.includes(bId));
   }
 
+  function allianceStrengthBetween(state, aId, bId) {
+    const matches = activeAlliances(state).filter(a => a.memberIds.includes(aId) && a.memberIds.includes(bId));
+    if (!matches.length) return 0;
+    return Math.max(...matches.map(a => Number(a.strength ?? 70)));
+  }
+
   function livingHouseguests(state) {
     return state.houseguests.filter(h => h.active);
   }
@@ -132,11 +138,12 @@
       const bond = bondScore(state, hoh.id, hg.id);
       const rival = Number(r.rivalry || 0);
       const alliance = isAllyOf(state, hoh.id, hg.id);
+      const allianceStrength = allianceStrengthBetween(state, hoh.id, hg.id);
       const strategicThreat = Number(hg.ratings?.strategic || 50);
       const compThreat = (Number(hg.ratings?.physical || 50) + Number(hg.ratings?.mental || 50)) / 2;
       let score = bond * 0.52 + Number(r.respect || 50) * 0.08 - rival * 0.24;
       score -= strategicThreat * 0.16 + compThreat * 0.08;
-      if (alliance) score += 34 + Number(r.trust || 50) * 0.12 + Number(r.loyalty || 50) * 0.12;
+      if (alliance) score += 20 + allianceStrength * 0.22 + Number(r.trust || 50) * 0.12 + Number(r.loyalty || 50) * 0.12;
       if (Number(r.friendship || 50) >= 72 && Number(r.trust || 50) >= 65) score += 18;
       // A weak/socially isolated houseguest is a more believable pawn.
       if (Number(hg.ratings?.social || 50) < 45 && bond >= 48) score += 7;
@@ -188,7 +195,7 @@
     const score = nominee => {
       const r = rel(state, hoh.id, nominee.id) || {};
       let v = bondScore(state, hoh.id, nominee.id);
-      if (isAllyOf(state, hoh.id, nominee.id)) v += 35;
+      if (isAllyOf(state, hoh.id, nominee.id)) v += 18 + allianceStrengthBetween(state, hoh.id, nominee.id) * 0.22;
       v += Number(r.friendship || 50) * 0.12 + Number(r.trust || 50) * 0.12 + Number(r.loyalty || 50) * 0.10;
       v -= Number(r.rivalry || 0) * 0.30;
       if (state.intendedTarget === nominee.id || state.intendedTarget === `${nominee.firstName} ${nominee.lastName}`.trim()) v -= 30;
@@ -243,8 +250,8 @@
     myAllies.forEach(a => {
       a.memberIds.forEach(mid => {
         if (mid === voter.id) return;
-        if (isAllyOf(state, mid, nomineeA.id)) scoreA += 12;
-        if (isAllyOf(state, mid, nomineeB.id)) scoreB += 12;
+        if (isAllyOf(state, mid, nomineeA.id)) scoreA += 6 + allianceStrengthBetween(state, mid, nomineeA.id) * 0.08;
+        if (isAllyOf(state, mid, nomineeB.id)) scoreB += 6 + allianceStrengthBetween(state, mid, nomineeB.id) * 0.08;
       });
     });
 

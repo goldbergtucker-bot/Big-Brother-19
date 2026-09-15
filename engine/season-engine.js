@@ -24,6 +24,7 @@
     if(e.entrantId!=null)d.entrantId=e.entrantId;
     if(e.recipientIds)d.recipientIds=[...e.recipientIds];
     if(e.participants)d.participants=[...e.participants];
+    if(e.povPlayers)d.povPlayers=[...e.povPlayers];
     if(e.nomineeIds)d.nomineeIds=[...e.nomineeIds];
     if(e.type==='eviction-voting'){d.votes=e.votes||[];d.voteCounts=e.voteCounts||{};d.nomineeIds=[...(e.nomineeIds||s.nominees||[])];}
     if(e.type==='eviction'){d.votes=e.votes||s.evictionVotes||[];d.voteCounts=e.voteCounts||{};d.evictedVoteCount=e.evictedVoteCount;d.stayVoteCount=e.stayVoteCount;d.tieBreakVoteId=e.tieBreakVoteId||null;}
@@ -139,7 +140,14 @@
     if(accepted){
       if(cfg.id==='pendant'){
         power={type:'pendant',ownerId:chosen.id,wonWeek:week,expiresWeek:week+2,used:false};chosen.pendantUntil=week+2;
-        const cursePool=living(s).filter(h=>h.id!==chosen.id);const cursed=shuffle(cursePool)[0];if(cursed){cursed.nominationCurseUntil=week+2;power.cursedId=cursed.id;}
+        // The Week 1 Pendant is the BB19-style protection only. It does not
+        // create an additional nomination curse, because the first regular
+        // veto must have exactly six players: HOH, two nominees, and three
+        // randomly selected players. Later Pendant implementations may carry
+        // their own separate effects if configured.
+        if(week>1){
+          const cursePool=living(s).filter(h=>h.id!==chosen.id);const cursed=shuffle(cursePool)[0];if(cursed){cursed.nominationCurseUntil=week+2;power.cursedId=cursed.id;}
+        }
       } else if(cfg.id==='ring'){
         power={type:'ring',ownerId:chosen.id,wonWeek:week,expiresWeek:week,used:false};
         const curse=shuffle(living(s).filter(h=>h.id!==chosen.id)).slice(0,3).map(h=>h.id);power.curseIds=curse;
@@ -180,7 +188,7 @@
   function selectPOVPlayers(s,week){
     const hoh=hg(s,s.currentHOH);const nominees=s.nominees.map(id=>hg(s,id)).filter(Boolean);let pool=living(s).filter(h=>h.id!==hoh.id&&!nominees.some(n=>n.id===h.id));
     const ring=s.powers.find(p=>p.type==='ring'&&!p.used&&p.ownerId&&p.expiresWeek>=week);if(ring&&Math.random()<0.55){ring.used=true;const owner=hg(s,ring.ownerId);if(owner&&!nominees.some(n=>n.id===owner.id)){const replace=shuffle(pool)[0];if(replace){pool=pool.filter(x=>x.id!==replace.id);pool.push(owner);log(s,{week,phase:'temptation',type:'ring-replacement',winnerId:owner.id,replacedId:replace.id,title:'Ring of Replacement',lines:[`${displayName(owner)} uses the Ring of Replacement and takes ${displayName(replace)}'s POV spot.`]});}}}
-    const selected=shuffle(pool).slice(0,Math.min(4,pool.length));const participants=[hoh,...nominees,...selected].filter((h,i,a)=>a.findIndex(x=>x.id===h.id)===i);
+    const selected=shuffle(pool).slice(0,Math.min(3,pool.length));const participants=[hoh,...nominees,...selected].filter((h,i,a)=>a.findIndex(x=>x.id===h.id)===i);
     s.povPlayers=participants.map(h=>h.id);
     log(s,{week,phase:'standard',type:'pov-players',hohId:hoh.id,nomineeIds:[...s.nominees],povPlayers:s.povPlayers,title:'Power of Veto — Picked Players',lines:[`The Power of Veto players are ${participants.map(displayName).join(', ')}.`]});
     return participants;
@@ -225,6 +233,13 @@
   function eviction(s,week,cycle=1){
     const noms=s.nominees.map(id=>hg(s,id)).filter(h=>h?.active);if(noms.length<2)return null;
     let voters=living(s).filter(h=>!noms.some(n=>n.id===h.id));
+    // BB19 premiere exception: the 17th Houseguest does NOT vote in the
+    // Hit the Road opening eviction because they already determined the eight
+    // Friendship Bracelet recipients. They regain normal voting rights for
+    // every subsequent eviction.
+    if(week===1 && cycle===0){
+      voters=voters.filter(v=>v.slot!==17);
+    }
     const eliminateOwner=s.houseguests.find(h=>h.eliminateTwoVotes&&h.active);
     if(eliminateOwner){const removed=shuffle(voters).slice(0,Math.min(2,voters.length));voters=voters.filter(v=>!removed.some(o=>o.id===v.id));eliminateOwner.eliminateTwoVotes=false;log(s,{week,phase:'temptation',type:'tree-vote-power',winnerId:eliminateOwner.id,title:'Tree of Temptation — Two Votes Eliminated',lines:[`${displayName(eliminateOwner)}'s power removes two eviction votes from the ceremony.`]});}
     const votes=[];const counts={};noms.forEach(n=>counts[n.id]=0);
@@ -236,7 +251,7 @@
       nomineeIds:noms.map(n=>n.id),votes,voteCounts:counts,title:"Eviction Voting",
       lines:[`${voters.length} Houseguests cast an eviction vote.`,
         `Eligible voters: ${voters.map(displayName).join(", ")}.`,
-        `${displayName(hg(s,"hg-17"))} is included as a voter when active and not nominated.`]});
+        `${week===1 && cycle===0 ? 'The 17th Houseguest does not vote in the Hit the Road opening eviction.' : 'The 17th Houseguest is eligible to vote in this eviction when active and not nominated.'}`]});
     const ordered=noms.slice().sort((a,b)=>counts[b.id]-counts[a.id]);
     let evictedId=ordered[0].id,tieBreakVoteId=null;
     const top=ordered.filter(n=>counts[n.id]===counts[ordered[0].id]);

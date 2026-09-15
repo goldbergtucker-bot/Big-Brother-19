@@ -16,31 +16,13 @@
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
   function rel(state, aId, bId) {
-    const r = state.relationships?.[aId]?.[bId];
-    return r || { friendship:50, trust:50, loyalty:50, rivalry:0, respect:50, attraction:0, type:"Unspecified" };
+    return state.relationships[aId] ? state.relationships[aId][bId] : null;
   }
 
-  function n(v, fallback=50) {
-    const x=Number(v);
-    return Number.isFinite(x) ? x : fallback;
-  }
-
-  // The relationship editor stores all six traits on a 0–100 scale. Keep
-  // the engine on that same scale so custom settings are actually meaningful
-  // to nominations, veto decisions, votes and the finale.
   function bondScore(state, aId, bId) {
     const r = rel(state, aId, bId);
-    return (n(r.friendship)+n(r.trust)+n(r.loyalty)+n(r.respect)-n(r.rivalry,0)) / 4;
-  }
-
-  function relationshipBias(state, aId, bId) {
-    const r=rel(state,aId,bId);
-    let v=(n(r.friendship)-50)*0.32 + (n(r.trust)-50)*0.34 + (n(r.loyalty)-50)*0.30;
-    v -= n(r.rivalry,0)*0.55;
-    v += (n(r.respect)-50)*0.16;
-    if(r.type === "Showmance" || r.type === "Bromance" || r.type === "Best Friends") v += 8;
-    if(r.type === "Rivalry" || r.type === "Frenemies") v -= 8;
-    return v;
+    if (!r) return 50;
+    return (r.friendship + r.trust + r.loyalty + r.respect - r.rivalry) / 4;
   }
 
   function adjustPair(state, aId, bId, deltas) {
@@ -64,12 +46,6 @@
 
   function isAllyOf(state, aId, bId) {
     return activeAlliances(state).some(a => a.memberIds.includes(aId) && a.memberIds.includes(bId));
-  }
-
-  function allianceStrengthBetween(state, aId, bId) {
-    const matches = activeAlliances(state).filter(a => a.memberIds.includes(aId) && a.memberIds.includes(bId));
-    if (!matches.length) return 0;
-    return Math.max(...matches.map(a => Number(a.strength ?? 70)));
   }
 
   function livingHouseguests(state) {
@@ -156,14 +132,12 @@
       const bond = bondScore(state, hoh.id, hg.id);
       const rival = Number(r.rivalry || 0);
       const alliance = isAllyOf(state, hoh.id, hg.id);
-      const allianceStrength = allianceStrengthBetween(state, hoh.id, hg.id);
       const strategicThreat = Number(hg.ratings?.strategic || 50);
       const compThreat = (Number(hg.ratings?.physical || 50) + Number(hg.ratings?.mental || 50)) / 2;
-      let score = bond * 0.40 + relationshipBias(state, hoh.id, hg.id);
+      let score = bond * 0.52 + Number(r.respect || 50) * 0.08 - rival * 0.24;
       score -= strategicThreat * 0.16 + compThreat * 0.08;
-      if (alliance) score += 28 + allianceStrength * 0.28 + n(r.trust)*0.15 + n(r.loyalty)*0.15;
-      if (n(r.friendship)>=72 && n(r.trust)>=65) score += 20;
-      if (n(r.rivalry,0)>=75) score -= 20;
+      if (alliance) score += 34 + Number(r.trust || 50) * 0.12 + Number(r.loyalty || 50) * 0.12;
+      if (Number(r.friendship || 50) >= 72 && Number(r.trust || 50) >= 65) score += 18;
       // A weak/socially isolated houseguest is a more believable pawn.
       if (Number(hg.ratings?.social || 50) < 45 && bond >= 48) score += 7;
       score += Math.random() * 24 - 12;
@@ -214,7 +188,7 @@
     const score = nominee => {
       const r = rel(state, hoh.id, nominee.id) || {};
       let v = bondScore(state, hoh.id, nominee.id);
-      if (isAllyOf(state, hoh.id, nominee.id)) v += 18 + allianceStrengthBetween(state, hoh.id, nominee.id) * 0.22;
+      if (isAllyOf(state, hoh.id, nominee.id)) v += 35;
       v += Number(r.friendship || 50) * 0.12 + Number(r.trust || 50) * 0.12 + Number(r.loyalty || 50) * 0.10;
       v -= Number(r.rivalry || 0) * 0.30;
       if (state.intendedTarget === nominee.id || state.intendedTarget === `${nominee.firstName} ${nominee.lastName}`.trim()) v -= 30;
@@ -248,7 +222,7 @@
 
     // Non-nominee winner: use it if they're close with a nominee.
     const best = nominees
-      .map(n => ({ n, score: bondScore(state, vetoWinner.id, n.id) + relationshipBias(state, vetoWinner.id, n.id) }))
+      .map(n => ({ n, score: bondScore(state, vetoWinner.id, n.id) }))
       .sort((a, b) => b.score - a.score)[0];
 
     const allyBoost = isAllyOf(state, vetoWinner.id, best.n.id) ? 18 : 0;
@@ -261,16 +235,16 @@
 
   /** A single voter's eviction pick between two on the block. */
   function decideVote(state, voter, nomineeA, nomineeB, hoh) {
-    let scoreA = bondScore(state, voter.id, nomineeA.id) + relationshipBias(state, voter.id, nomineeA.id);
-    let scoreB = bondScore(state, voter.id, nomineeB.id) + relationshipBias(state, voter.id, nomineeB.id);
+    let scoreA = bondScore(state, voter.id, nomineeA.id);
+    let scoreB = bondScore(state, voter.id, nomineeB.id);
 
     // Vote with your alliance's lean if it has one.
     const myAllies = alliesOf(state, voter.id);
     myAllies.forEach(a => {
       a.memberIds.forEach(mid => {
         if (mid === voter.id) return;
-        if (isAllyOf(state, mid, nomineeA.id)) scoreA += 6 + allianceStrengthBetween(state, mid, nomineeA.id) * 0.08;
-        if (isAllyOf(state, mid, nomineeB.id)) scoreB += 6 + allianceStrengthBetween(state, mid, nomineeB.id) * 0.08;
+        if (isAllyOf(state, mid, nomineeA.id)) scoreA += 12;
+        if (isAllyOf(state, mid, nomineeB.id)) scoreB += 12;
       });
     });
 
@@ -285,9 +259,9 @@
     // Take whoever you're most likely to beat: favor a lower jury-perceived
     // respect/strategic threat over pure friendship.
     const scored = others.map(hg => {
-      const bond = bondScore(state, finalHoh.id, hg.id) + relationshipBias(state, finalHoh.id, hg.id);
+      const bond = bondScore(state, finalHoh.id, hg.id);
       const threat = hg.ratings.strategic * 0.6 + hg.ratings.social * 0.4;
-      return { hg, score: bond * 0.62 - threat * 0.38 + (Math.random() * 10 - 5) };
+      return { hg, score: bond * 0.5 - threat * 0.5 + (Math.random() * 10 - 5) };
     });
     scored.sort((a, b) => b.score - a.score);
     return scored[0].hg;
@@ -295,8 +269,8 @@
 
   /** A single juror's vote between the two finalists. */
   function decideJuryVote(state, juror, finalistA, finalistB) {
-    const bondA = bondScore(state, juror.id, finalistA.id) + relationshipBias(state, juror.id, finalistA.id);
-    const bondB = bondScore(state, juror.id, finalistB.id) + relationshipBias(state, juror.id, finalistB.id);
+    const bondA = bondScore(state, juror.id, finalistA.id);
+    const bondB = bondScore(state, juror.id, finalistB.id);
     const gameA = finalistA.ratings.strategic * 0.65 + finalistA.ratings.mental * 0.35;
     const gameB = finalistB.ratings.strategic * 0.65 + finalistB.ratings.mental * 0.35;
 
@@ -306,7 +280,7 @@
   }
 
   window.RelEngine = {
-    bondScore, relationshipBias, adjustPair, isAllyOf, alliesOf, activeAlliances,
+    bondScore, adjustPair, isAllyOf, alliesOf, activeAlliances,
     formAlliances, pruneAlliances, pickNominees, pickReplacement,
     decideVetoUse, decideVote, decideTieBreak, planBackdoor, decideFinalTwoPick, decideJuryVote,
     livingHouseguests

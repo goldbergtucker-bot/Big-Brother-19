@@ -50,7 +50,17 @@
       });
     return out;
   };
-  const byId = (view,id) => view?.houseguests?.find(h=>h.id===id) || state.houseguests.find(h=>h.id===id);
+  const byId = (view,id) => {
+    const snap = view?.houseguests?.find(h=>h.id===id);
+    const live = state.houseguests.find(h=>h.id===id);
+    if (!snap) return live;
+    // Event snapshots intentionally preserve the state at that moment, but
+    // portraits are presentation assets and may have been added/edited in the
+    // setup cast after an older snapshot was created. Fill a missing snapshot
+    // portrait from the current cast without changing any game-state values.
+    if (!snap.portraitUrl && live?.portraitUrl) return {...snap, portraitUrl:live.portraitUrl};
+    return snap;
+  };
   const ordinal = n => SeasonEngine.ordinal(n);
   const weekLabel = w => w === "Final" ? "FINALE" : w === 0 ? "MOVE-IN" : `WEEK ${w}`;
   const toastMsg = m => { toast.textContent=m; toast.classList.add("show"); clearTimeout(toastMsg.t); toastMsg.t=setTimeout(()=>toast.classList.remove("show"),2200); };

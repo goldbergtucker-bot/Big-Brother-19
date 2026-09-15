@@ -170,6 +170,34 @@
       }
       return body;
     }
+    if (entry.type === "friendship-bracelets") {
+      const recipients=(d.recipientIds||[]).map(id=>byId(view,id)).filter(Boolean);
+      const entrant=byId(view,d.winnerId);
+      const remaining=(d.participants||[]).map(id=>byId(view,id)).filter(h=>h && !(d.recipientIds||[]).includes(h.id));
+      body += `<div class="ceremony-layout">
+        <div class="ceremony-role-section"><div class="ceremony-label">17TH HOUSEGUEST</div><div class="ceremony-hoh">${card(entrant,"BRACELET GIVER")}</div></div>
+        <div class="ceremony-arrow">▼</div>
+        <div class="ceremony-role-section"><div class="ceremony-label">8 FRIENDSHIP BRACELETS — SAFE</div><div class="ceremony-players">${recipients.map(h=>card(h,"SAFE")).join("")}</div></div>
+        <div class="ceremony-arrow">▼</div>
+        <div class="ceremony-role-section"><div class="ceremony-label">8 HOUSEGUESTS WITHOUT BRACELETS</div><div class="ceremony-players">${remaining.map(h=>card(h,"MUST COMPETE")).join("")}</div></div>
+      </div>`;
+      return body;
+    }
+    if (entry.type === "hit-the-road") {
+      const winner=byId(view,d.winnerId);
+      const nominees=(d.nomineeIds||[]).map(id=>byId(view,id)).filter(Boolean);
+      body += `<div class="ceremony-layout">
+        <div class="ceremony-role-section"><div class="ceremony-label">HIT THE ROAD WINNER — SAFE</div><div class="ceremony-hoh">${card(winner,"SAFE")}</div></div>
+        <div class="ceremony-arrow">▼</div>
+        <div class="ceremony-role-section"><div class="ceremony-label">3 OPENING NOMINEES</div><div class="ceremony-players">${nominees.map(h=>card(h,"NOMINEE")).join("")}</div></div>
+      </div>`;
+      return body;
+    }
+    if (entry.type === "self-eviction") {
+      const walker=byId(view,d.selfEvictedId);
+      body += `<div class="eviction-result self-eviction-result">${walker ? card(walker,"SELF-EVICTED") : ""}<div class="eviction-vote-count"><strong>${esc(displayName(walker))}</strong> has chosen to leave the Big Brother house. This is a walk, not a normal eviction, so no placement or jury status is assigned.</div></div>`;
+      return body;
+    }
     if (entry.type === "eviction-voting") {
       const votes = d.votes || view?.evictionVotes || [];
       body += `<div class="vote-list">${votes.map(v=>{const voter=byId(view,v.voterId),target=byId(view,v.targetId);return `<div class="vote-row"><div class="vote-person">${portrait(voter,"vote-portrait")}<strong>${esc(displayName(voter))}</strong></div><div class="vote-arrow">VOTES TO EVICT</div><div class="vote-person target">${portrait(target,"vote-portrait")}<strong>${esc(displayName(target))}</strong></div></div>`}).join("")}</div>`;
@@ -280,7 +308,7 @@
     eventCounter.textContent=`${index+1} / ${history.length}`;
   }
   function statusBadge(h,view){
-    if(!h.active){if(h.placement===1)return `<span class="pill winner">WINNER</span>`;if(h.placement===2)return `<span class="pill runner">RUNNER-UP</span>`;if(h.juryMember)return `<span class="pill jury">JURY · ${ordinal(h.placement)}</span>`;return `<span class="pill out">${ordinal(h.placement)}</span>`;}
+    if(!h.active){if(h.selfEvicted)return `<span class="pill out">SELF-EVICTED</span>`;if(h.placement===1)return `<span class="pill winner">WINNER</span>`;if(h.placement===2)return `<span class="pill runner">RUNNER-UP</span>`;if(h.juryMember)return `<span class="pill jury">JURY · ${ordinal(h.placement)}</span>`;return `<span class="pill out">${ordinal(h.placement)}</span>`;}
     if(view?.currentHOH===h.id)return `<span class="pill hoh">HOH</span>`;
     if(view?.nominees?.includes(h.id))return `<span class="pill nom">NOMINATED</span>`;
     if(view?.povPlayers?.includes(h.id))return `<span class="pill pov">POV</span>`;

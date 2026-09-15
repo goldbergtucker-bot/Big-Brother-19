@@ -528,7 +528,6 @@
     return state.relationships[a][b];
   }
   function renderRelationships(){
-    if(window.BB19SocialAPI?.render){ window.BB19SocialAPI.render(); return; }
     if(!relationshipsGrid)return;
     const ids=state.houseguests.map(h=>h.id);
     if(ids.length<2){relationshipsGrid.innerHTML="<p>Add at least two houseguests.</p>";return;}
@@ -556,20 +555,22 @@
     REL_KEYS.forEach(k=>{r[k]=preset[k];}); r.type=preset.type;
     if(both){const rr=ensureRelationship(b,a);REL_KEYS.forEach(k=>{rr[k]=preset[k];});rr.type=preset.type;rr.notes=r.notes||"";}
     state.season.relationshipsCustomized=true;
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
     renderRelationships();
   }
   function setRelationshipType(a,b,type,both){
     const r=ensureRelationship(a,b);r.type=type;
     if(both){const rr=ensureRelationship(b,a);rr.type=type;}
     state.season.relationshipsCustomized=true;
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
   }
   function setRelationshipPair(a,b,key,value,both){
     const r=ensureRelationship(a,b);r[key]=Number(value);
     if(both){const rr=ensureRelationship(b,a);rr[key]=Number(value);}
     state.season.relationshipsCustomized=true;
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
   }
   function renderAlliancesSetup(){
-    if(window.BB19SocialAPI?.render){ window.BB19SocialAPI.render(); return; }
     if(!allianceSetup)return;
     const alliances=state.alliances||[];
     const memberPicker=state.houseguests.map(h=>`<label class="member-picker-card"><input type="checkbox" data-new-alliance-member="${h.id}"><span class="member-picker-portrait">${portrait(h,"alliance-picker-portrait")}</span><span>${esc(displayName(h))}</span></label>` ).join("");
@@ -597,10 +598,11 @@
       const a={id,name:allianceName,type:allianceType,memberIds,formedWeek:0,active:true,custom:true,strength,secrecy,goal};
       state.alliances.push(a);
       memberIds.forEach(id=>{const h=byId(null,id);if(h&&!h.allianceIds.includes(a.id))h.allianceIds.push(a.id);});
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
       renderAlliancesSetup();toastMsg(`${allianceName} created.`);
     });
     allianceSetup.querySelectorAll('[data-remove-alliance]').forEach(btn=>btn.addEventListener("click",()=>{
-      const id=btn.dataset.removeAlliance;state.alliances=state.alliances.filter(a=>a.id!==id);state.houseguests.forEach(h=>h.allianceIds=h.allianceIds.filter(x=>x!==id));renderAlliancesSetup();
+      const id=btn.dataset.removeAlliance;state.alliances=state.alliances.filter(a=>a.id!==id);state.houseguests.forEach(h=>h.allianceIds=h.allianceIds.filter(x=>x!==id));localStorage.setItem(STORAGE_KEY,JSON.stringify(state));renderAlliancesSetup();
     }));
   }
   function ensureFeedSettings(){
@@ -699,29 +701,5 @@
     const saved=Number(localStorage.getItem(REVEAL_KEY));
     if(history.length){pointer=Number.isFinite(saved)?saved:-1;setupView.classList.add("hidden");seasonView.classList.remove("hidden");updateSeasonUI();}
   }catch(e){console.warn(e)}}
-  // Public bridge for the dedicated social-setup controller. The simulator
-  // still owns the actual state; this only exposes safe getters/setters so
-  // the relationship/alliance UI cannot lose changes during a rerender.
-  window.BB19SocialAPI = {
-    getState: () => state,
-    normalize: () => { normalizeSocialState(); return state; },
-    refresh: () => { normalizeSocialState(); if(window.BB19SocialAPI?.render) window.BB19SocialAPI.render(); },
-    setRelationship: (a,b,data,both=true) => {
-      const r=ensureRelationship(a,b); Object.keys(data||{}).forEach(k=>{ if(k==='notes'||k==='type') r[k]=String(data[k]??''); else if(REL_KEYS.includes(k)) r[k]=Math.max(0,Math.min(100,Number(data[k]))); });
-      if(both){ const rr=ensureRelationship(b,a); Object.keys(data||{}).forEach(k=>{ if(k==='notes'||k==='type') rr[k]=String(data[k]??''); else if(REL_KEYS.includes(k)) rr[k]=Math.max(0,Math.min(100,Number(data[k]))); }); }
-      state.season.relationshipsCustomized=true;
-      localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
-      if(window.BB19SocialAPI?.render) window.BB19SocialAPI.render();
-    },
-    addAlliance: (data) => {
-      normalizeSocialState();
-      const memberIds=[...(data.memberIds||[])];
-      const a={id:`custom-alliance-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,name:String(data.name||'').trim(),type:String(data.type||'Custom'),memberIds,formedWeek:0,active:true,custom:true,strength:Number(data.strength??70),secrecy:String(data.secrecy||'Public'),goal:String(data.goal||'Game control')};
-      if(!a.name || memberIds.length<2) throw new Error('Enter an alliance name and choose at least two members.');
-      state.alliances.push(a); memberIds.forEach(id=>{const h=state.houseguests.find(x=>x.id===id); if(h&&!h.allianceIds.includes(a.id)) h.allianceIds.push(a.id);});
-      localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); if(window.BB19SocialAPI?.render) window.BB19SocialAPI.render(); return a;
-    },
-    removeAlliance: (id) => { state.alliances=(state.alliances||[]).filter(a=>a.id!==id); state.houseguests.forEach(h=>h.allianceIds=(h.allianceIds||[]).filter(x=>x!==id)); localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); if(window.BB19SocialAPI?.render) window.BB19SocialAPI.render(); }
-  };
   refreshSetup();resume();
 })();

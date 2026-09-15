@@ -699,7 +699,6 @@
     const saved=Number(localStorage.getItem(REVEAL_KEY));
     if(history.length){pointer=Number.isFinite(saved)?saved:-1;setupView.classList.add("hidden");seasonView.classList.remove("hidden");updateSeasonUI();}
   }catch(e){console.warn(e)}}
-  refreshSetup();resume();
   // Public bridge for the dedicated social-setup controller. The simulator
   // still owns the actual state; this only exposes safe getters/setters so
   // the relationship/alliance UI cannot lose changes during a rerender.
@@ -724,4 +723,5 @@
     },
     removeAlliance: (id) => { state.alliances=(state.alliances||[]).filter(a=>a.id!==id); state.houseguests.forEach(h=>h.allianceIds=(h.allianceIds||[]).filter(x=>x!==id)); localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); if(window.BB19SocialAPI?.render) window.BB19SocialAPI.render(); }
   };
+  refreshSetup();resume();
 })();

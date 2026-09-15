@@ -698,4 +698,28 @@
     if(history.length){pointer=Number.isFinite(saved)?saved:-1;setupView.classList.add("hidden");seasonView.classList.remove("hidden");updateSeasonUI();}
   }catch(e){console.warn(e)}}
   refreshSetup();resume();
+  // Public bridge for the dedicated social-setup controller. The simulator
+  // still owns the actual state; this only exposes safe getters/setters so
+  // the relationship/alliance UI cannot lose changes during a rerender.
+  window.BB19SocialAPI = {
+    getState: () => state,
+    normalize: () => { normalizeSocialState(); return state; },
+    refresh: () => { normalizeSocialState(); renderRelationships(); renderAlliancesSetup(); },
+    setRelationship: (a,b,data,both=true) => {
+      const r=ensureRelationship(a,b); Object.keys(data||{}).forEach(k=>{ if(k==='notes'||k==='type') r[k]=String(data[k]??''); else if(REL_KEYS.includes(k)) r[k]=Math.max(0,Math.min(100,Number(data[k]))); });
+      if(both){ const rr=ensureRelationship(b,a); Object.keys(data||{}).forEach(k=>{ if(k==='notes'||k==='type') rr[k]=String(data[k]??''); else if(REL_KEYS.includes(k)) rr[k]=Math.max(0,Math.min(100,Number(data[k]))); }); }
+      state.season.relationshipsCustomized=true;
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+      renderRelationships();
+    },
+    addAlliance: (data) => {
+      normalizeSocialState();
+      const memberIds=[...(data.memberIds||[])];
+      const a={id:`custom-alliance-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,name:String(data.name||'').trim(),type:String(data.type||'Custom'),memberIds,formedWeek:0,active:true,custom:true,strength:Number(data.strength??70),secrecy:String(data.secrecy||'Public'),goal:String(data.goal||'Game control')};
+      if(!a.name || memberIds.length<2) throw new Error('Enter an alliance name and choose at least two members.');
+      state.alliances.push(a); memberIds.forEach(id=>{const h=state.houseguests.find(x=>x.id===id); if(h&&!h.allianceIds.includes(a.id)) h.allianceIds.push(a.id);});
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); renderAlliancesSetup(); return a;
+    },
+    removeAlliance: (id) => { state.alliances=(state.alliances||[]).filter(a=>a.id!==id); state.houseguests.forEach(h=>h.allianceIds=(h.allianceIds||[]).filter(x=>x!==id)); localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); renderAlliancesSetup(); }
+  };
 })();

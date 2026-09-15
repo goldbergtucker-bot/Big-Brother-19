@@ -306,11 +306,19 @@
       const winner = byId(view, winnerId);
       if (winner) body += `<div class="hero-players wildcard-winner-only">${card(winner,"WILDCARD WINNER")}</div>`;
     } else if (players.length) {
-      // HOH competitions must display every eligible houseguest. Older versions
-      // limited the generic event renderer to eight cards, which incorrectly
-      // hid half the cast in a 16-person season.
-      const displayPlayers = entry.type === "hoh" ? players : players;
-      body += `<div class="hero-players ${entry.type === "hoh" ? "hoh-competition-players" : ""}">${displayPlayers.map(h=>card(h,h.id===d.winnerId?"WINNER":"")).join("")}</div>`;
+      // Competition result screens show the winner only. The full player pool
+      // remains stored in the event data, but is not presented here.
+      const winnerOnlyTypes = new Set([
+        "hoh", "hoh-de", "pov", "pov-de",
+        "final-hoh-1", "final-hoh-2", "final-hoh-3"
+      ]);
+      if (winnerOnlyTypes.has(entry.type)) {
+        const winnerId = d.winnerId || entry.winnerId || entry.competition?.winner?.id;
+        const winner = byId(view, winnerId);
+        if (winner) body += `<div class="hero-players competition-winner-only">${card(winner, entry.type.includes("hoh") ? "HOH WINNER" : "POV WINNER")}</div>`;
+      } else {
+        body += `<div class="hero-players">${players.map(h=>card(h,h.id===d.winnerId?"WINNER":"")).join("")}</div>`;
+      }
     }
     return body;
   }

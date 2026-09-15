@@ -10,44 +10,90 @@
   function rel(s,a,b){return s.relationships?.[a.id]?.[b.id]||{friendship:50,trust:50,loyalty:50,respect:50,rivalry:0,attraction:0};}
   function bond(s,a,b){const r=rel(s,a,b);return (r.friendship*.30+r.trust*.25+r.loyalty*.15+r.respect*.20+r.attraction*.10-r.rivalry*.35);}
   function ally(s,a,b){return (s.alliances||[]).some(x=>x.active!==false&&x.memberIds.includes(a.id)&&x.memberIds.includes(b.id));}
-  function snapshot(s){return {phase:s.phase,week:s.week,currentHOH:s.currentHOH,originalHOH:s.originalHOH,secretHOH:s.secretHOH,dethronedHOH:s.dethronedHOH,nominees:[...s.nominees],intendedTarget:s.intendedTarget,targetHistory:[...(s.targetHistory||[])],backdoorTargetId:s.backdoorTargetId||null,backdoorPlanActive:!!s.backdoorPlanActive,povPlayers:[...s.povPlayers],vetoWinners:[...s.vetoWinners],evictionVotes:[...(s.evictionVotes||[])],evicted:[...s.evicted],jury:[...s.jury],powers:(s.powers||[]).map(x=>({...x})),temptations:[...(s.temptations||[])],firstTemptation:s.firstTemptation?{...s.firstTemptation}:null,treeOfTemptation:s.treeOfTemptation?{...s.treeOfTemptation}:null,battleBack:s.battleBack?JSON.parse(JSON.stringify(s.battleBack)):null,houseguests:s.houseguests.map(h=>({id:h.id,slot:h.slot,firstName:h.firstName,lastName:h.lastName,portraitUrl:h.portraitUrl,gender:h.gender,active:h.active,safe:h.safe,nominated:h.nominated,juryMember:h.juryMember,evicted:h.evicted,placement:h.placement}))};}
-  function eventData(s,e){const d={...(e.data||{})};if(e.type==='eviction'){d.votes=e.votes||s.evictionVotes||[];d.voteCounts=e.voteCounts||{};d.evictedVoteCount=e.evictedVoteCount;d.stayVoteCount=e.stayVoteCount;d.tieBreakVoteId=e.tieBreakVoteId||null;}if(e.type==='veto-ceremony'){d.vetoUsed=!!e.vetoUsed;d.savedId=e.savedId||null;d.replacementId=e.replacementId||null;d.finalNomineeIds=[...s.nominees];}return d;}
+  function snapshot(s){return {phase:s.phase,week:s.week,currentHOH:s.currentHOH,originalHOH:s.originalHOH,secretHOH:s.secretHOH,dethronedHOH:s.dethronedHOH,nominees:[...s.nominees],intendedTarget:s.intendedTarget,targetHistory:[...(s.targetHistory||[])],backdoorTargetId:s.backdoorTargetId||null,backdoorPlanActive:!!s.backdoorPlanActive,povPlayers:[...s.povPlayers],vetoWinners:[...s.vetoWinners],evictionVotes:[...(s.evictionVotes||[])],evicted:[...s.evicted],jury:[...s.jury],powers:(s.powers||[]).map(x=>({...x})),temptations:[...(s.temptations||[])],firstTemptation:s.firstTemptation?{...s.firstTemptation}:null,treeOfTemptation:s.treeOfTemptation?{...s.treeOfTemptation}:null,battleBack:s.battleBack?JSON.parse(JSON.stringify(s.battleBack)):null,houseguests:s.houseguests.map(h=>({id:h.id,slot:h.slot,firstName:h.firstName,lastName:h.lastName,portraitUrl:h.portraitUrl,gender:h.gender,active:h.active,safe:h.safe,nominated:h.nominated,juryMember:h.juryMember,evicted:h.evicted,selfEvicted:!!h.selfEvicted,friendshipBracelet:!!h.friendshipBracelet,placement:h.placement}))};}
+  function eventData(s,e){const d={...(e.data||{})};if(e.type==='eviction-voting'){d.votes=e.votes||[];d.voteCounts=e.voteCounts||{};d.nomineeIds=[...(e.nomineeIds||s.nominees||[])];}if(e.type==='eviction'){d.votes=e.votes||s.evictionVotes||[];d.voteCounts=e.voteCounts||{};d.evictedVoteCount=e.evictedVoteCount;d.stayVoteCount=e.stayVoteCount;d.tieBreakVoteId=e.tieBreakVoteId||null;}if(e.type==='veto-ceremony'){d.vetoUsed=!!e.vetoUsed;d.savedId=e.savedId||null;d.replacementId=e.replacementId||null;d.finalNomineeIds=[...s.nominees];}return d;}
   function log(s,e){const r={id:s.history.length+1,...e};r.snapshot=snapshot(s);r.data=eventData(s,r);s.history.push(r);}
   function ensureState(s){s.targetHistory=s.targetHistory||[];s.powers=s.powers||[];s.temptations=s.temptations||[];s.jury=s.jury||[];s.evicted=s.evicted||[];s.nominees=s.nominees||[];s.povPlayers=s.povPlayers||[];s.vetoWinners=s.vetoWinners||[];s.evictionVotes=s.evictionVotes||[];s.alliances=s.alliances||[];}
   function resetFlags(s){s.houseguests.forEach(h=>{h.safe=false;h.nominated=false;});}
   function chooseFirstTemptation(s){
-    // The custom BB19 format begins with the first 16 houseguests.
-    // Slot 17 is editable during setup, but does not enter the house until
-    // the Garden of Temptation has concluded.
-    const players=living(s).filter(h=>h.slot!==17);
-    const entrant=hg(s, 'hg-17');
-    const scored=players.map(h=>{
-      const risk=(h.ratings?.general||50)*.18+(h.ratings?.strategic||50)*.18+(h.ratings?.social||50)*.08+(h.ratings?.physical||50)*.08+Math.random()*58;
-      return {h,score:risk};
-    }).sort((a,b)=>b.score-a.score);
+    // BB19 premiere format: the first 16 houseguests begin the game.
+    // The $25,000 is always taken; only the first presser is randomized.
+    // The editable slot 17 is then brought into the house by the temptation.
+    const starters=living(s).filter(h=>h.slot!==17);
+    const entrant=hg(s,"hg-17");
+    const scored=starters.map(h=>({h,score:
+      (h.ratings?.general||50)*.18+(h.ratings?.strategic||50)*.18+
+      (h.ratings?.social||50)*.08+(h.ratings?.physical||50)*.08+
+      Math.random()*58
+    })).sort((a,b)=>b.score-a.score);
     const winner=scored[0].h;
     s.firstTemptation={winnerId:winner.id,amount:25000,guaranteedTaken:true};
-    // The actual BB19 consequence was that the money-taker had to throw the first HOH.
     winner.mustThrowFirstHOH=true;
-    log(s,{week:1,phase:'premiere',type:'temptation-25000',winnerId:winner.id,participants:players.map(p=>p.id),title:'Garden of Temptation — $25,000',lines:[`${displayName(winner)} was the first houseguest to press the button and takes $25,000.`,`The $25,000 temptation was guaranteed to be taken; the race determined who pressed first.`,`As the personal consequence, ${displayName(winner)} must throw the first HOH competition.`]});
-    // The 17th houseguest is the special entrant created by the Garden of
-    // Temptation. They are not part of the button race and join immediately
-    // after the $25,000 is claimed, before the first HOH.
+
+    log(s,{week:1,phase:"premiere",type:"temptation-25000",winnerId:winner.id,
+      participants:starters.map(p=>p.id),title:"Garden of Temptation — $25,000",
+      lines:[`${displayName(winner)} was the first houseguest to press the button and takes $25,000.`,
+        "The $25,000 temptation was guaranteed to be taken; the race determined who pressed first.",
+        `${displayName(winner)} must throw the first HOH competition.`]});
+
     if(entrant){
-      entrant.active=true;
-      entrant.safe=false;
-      entrant.nominated=false;
-      log(s,{week:1,phase:'premiere',type:'houseguest-entry',entrantId:entrant.id,participants:[entrant.id],title:'The 17th Houseguest Enters',lines:[`${displayName(entrant)} enters the Big Brother house as the 17th houseguest.`,`The opening Garden of Temptation is complete, and the full 17-person cast is now in the game.`]});
+      entrant.active=true; entrant.safe=false; entrant.nominated=false;
+      log(s,{week:1,phase:"premiere",type:"houseguest-entry",entrantId:entrant.id,
+        participants:[entrant.id],title:"The 17th Houseguest Enters",
+        lines:[`${displayName(entrant)} enters the Big Brother house as the 17th houseguest.`,
+          "The Garden of Temptation has brought a new Houseguest into the game."]});
     }
     return winner;
   }
-  function runHitTheRoad(s){
-    const pool=living(s);
-    const comp=C().runCompetition(pool,{week:1,type:'hit-the-road'});
-    const winner=comp.winner;winner.firstSafety=true;winner.safe=true;
-    log(s,{week:1,phase:'premiere',type:'hit-the-road',winnerId:winner.id,participants:pool.map(p=>p.id),competition:comp,title:`Hit the Road — ${comp.label}`,lines:[`${displayName(winner)} wins Hit the Road and earns premiere safety.`]});
-    return winner;
+
+  function runFriendshipBracelets(s){
+    // The new 17th Houseguest receives the BB19-style power to grant eight
+    // Friendship Bracelets. Those eight are safe from the premiere eviction.
+    const entrant=hg(s,"hg-17");
+    const starters=living(s).filter(h=>h.slot!==17);
+    if(!entrant || !entrant.active || starters.length<8)return null;
+    const ranked=starters.map(h=>({h,score:
+      bond(s,entrant,h)+Number(h.ratings?.social||50)*.12+Math.random()*28
+    })).sort((a,b)=>b.score-a.score);
+    const recipients=ranked.slice(0,8).map(x=>x.h);
+    const protectedIds=new Set(recipients.map(h=>h.id));
+    recipients.forEach(h=>{h.safe=true;h.friendshipBracelet=true;});
+    const unprotected=starters.filter(h=>!protectedIds.has(h.id));
+    log(s,{week:1,phase:"premiere",type:"friendship-bracelets",winnerId:entrant.id,
+      recipientIds:recipients.map(h=>h.id),participants:starters.map(h=>h.id),
+      title:"Friendship Bracelets — 8 Houseguests Safe",
+      lines:[`${displayName(entrant)} gives Friendship Bracelets to eight Houseguests, making them safe from the opening eviction.`,
+        `${recipients.map(displayName).join(", ")} receive Friendship Bracelets.`,
+        `${unprotected.map(displayName).join(", ")} do not receive bracelets and must compete for safety in Hit the Road.`]});
+    return {recipients,unprotected};
   }
+
+  function runHitTheRoad(s){
+    // Only the eight Houseguests without Friendship Bracelets compete.
+    const eligible=living(s).filter(h=>h.slot!==17&&!h.safe);
+    if(eligible.length<3)return null;
+    const comp=C().runCompetition(eligible,{week:1,type:"hit-the-road"});
+    const winner=comp.winner;
+    winner.safe=true; winner.firstSafety=true;
+
+    // BB19's premiere competition left three Houseguests with poisoned apples.
+    // We model the uncertainty with the competition ranking rather than making
+    // the three nominees fixed.
+    const ranking=comp.ranking||[];
+    const nomineeIds=ranking.slice(-3).map(x=>x.id);
+    const nominees=nomineeIds.map(id=>hg(s,id)).filter(Boolean);
+    s.nominees=nominees.map(h=>h.id);
+    nominees.forEach(h=>{h.nominated=true;h.safe=false;});
+
+    log(s,{week:1,phase:"premiere",type:"hit-the-road",winnerId:winner.id,
+      participants:eligible.map(p=>p.id),nomineeIds:s.nominees,
+      competition:comp,title:`Hit the Road — ${comp.label}`,
+      lines:[`${displayName(winner)} wins Hit the Road and earns safety.`,
+        `${nominees.map(displayName).join(", ")} receive the three poisoned apples and are nominated for the opening eviction.`,
+        "The three nominees will now face the first eviction vote. The 17th Houseguest is eligible to vote."]});
+    return {winner,nominees,comp};
+  }
+
   function runFirstHOH(s){
     let pool=living(s).filter(h=>!h.mustThrowFirstHOH);
     if(pool.length<2)pool=living(s).filter(h=>!h.mustThrowFirstHOH);
@@ -160,13 +206,22 @@
       const scored=noms.map(n=>{const r=rel(s,v,n);let score=bond(s,v,n)+Number(r.friendship||50)*.10+Number(r.trust||50)*.08+Number(r.loyalty||50)*.06-Number(r.rivalry||0)*.22;if(n.id===s.intendedTarget)score-=24;if(n.id===s.backdoorTargetId)score-=32;if(ally(s,v,n))score+=14;score+=Math.random()*22-11;return {n,score};}).sort((a,b)=>a.score-b.score);
       const target=scored[0].n.id;counts[target]++;votes.push({voterId:v.id,targetId:target});
     });
+    log(s,{week,phase:cycle>1?"double-eviction":(cycle===0?"premiere":"standard"),type:"eviction-voting",
+      nomineeIds:noms.map(n=>n.id),votes,voteCounts:counts,title:"Eviction Voting",
+      lines:[`${voters.length} Houseguests cast an eviction vote.`,
+        `Eligible voters: ${voters.map(displayName).join(", ")}.`,
+        `${displayName(hg(s,"hg-17"))} is included as a voter when active and not nominated.`]});
     const ordered=noms.slice().sort((a,b)=>counts[b.id]-counts[a.id]);
     let evictedId=ordered[0].id,tieBreakVoteId=null;
     const top=ordered.filter(n=>counts[n.id]===counts[ordered[0].id]);
-    if(top.length>1){const hoh=hg(s,s.currentHOH);evictedId=R().decideTieBreak(s,hoh,top[0],top[1]);tieBreakVoteId=evictedId;}
+    if(top.length>1){
+      const hoh=hg(s,s.currentHOH);
+      evictedId=hoh ? R().decideTieBreak(s,hoh,top[0],top[1]) : shuffle(top)[0].id;
+      tieBreakVoteId=hoh ? evictedId : null;
+    }
     const ev=hg(s,evictedId);ev.active=false;ev.evicted=true;ev.placement=living(s).length+1;s.evicted.push(ev.id);if(ev.placement<=window.BB19_CONFIG.juryThresholdPlacement&&!s.jury.includes(ev.id)){ev.juryMember=true;s.jury.push(ev.id);}
     const countText=Object.entries(counts).map(([id,n])=>`${displayName(hg(s,id))}: ${n}`).join(' • ');
-    log(s,{week,phase:cycle>1?'double-eviction':'standard',type:'eviction',evictedId:ev.id,nomineeIds:noms.map(n=>n.id),votes,voteCounts:counts,evictedVoteCount:counts[ev.id],tieBreakVoteId,title:'Eviction',lines:[tieBreakVoteId?`${displayName(ev)} is evicted after a tie-breaker.`:`${displayName(ev)} is evicted.`,noms.length===2?`By a vote of ${counts[noms[0].id]} to ${counts[noms[1].id]}, ${displayName(ev)} is evicted.`:`Vote count: ${countText}`,ev.juryMember?`${displayName(ev)} joins the jury.`:`${displayName(ev)} finishes in ${ordinal(ev.placement)} place.`]});
+    log(s,{week,phase:cycle>1?'double-eviction':(cycle===0?'premiere':'standard'),type:'eviction',evictedId:ev.id,nomineeIds:noms.map(n=>n.id),votes,voteCounts:counts,evictedVoteCount:counts[ev.id],tieBreakVoteId,title:'Eviction',lines:[tieBreakVoteId?`${displayName(ev)} is evicted after a tie-breaker.`:`${displayName(ev)} is evicted.`,noms.length===2?`By a vote of ${counts[noms[0].id]} to ${counts[noms[1].id]}, ${displayName(ev)} is evicted.`:`Vote count: ${countText}`,ev.juryMember?`${displayName(ev)} joins the jury.`:`${displayName(ev)} finishes in ${ordinal(ev.placement)} place.`]});
     s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.evictionVotes=[];s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;return ev;
   }
   function battleBack(s){
@@ -177,6 +232,34 @@
     if(final.winner.id===challenger.id){challenger.active=true;challenger.evicted=false;challenger.placement=null;challenger.juryMember=false;s.jury=s.jury.filter(id=>id!==challenger.id);s.evicted=s.evicted.filter(id=>id!==challenger.id);log(s,{week:4,phase:'battle-back',type:'battleback-return',winnerId:challenger.id,title:'Battle Back — Return to the Game',lines:[`${displayName(challenger)} returns to the game.`]});return challenger;}
     return null;
   }
+  function runFirstWeekSelfEviction(s){
+    // BB19's first week also contained a self-eviction/walk. It must happen
+    // before the POV so the remainder of the season starts with the correct
+    // active-houseguest count. The walker is not an eviction, is not a jury
+    // member, and does not receive a placement.
+    const nominees=s.nominees.map(id=>hg(s,id)).filter(h=>h?.active && h.slot!==17);
+    if(!nominees.length)return null;
+    const walker=nominees[Math.floor(Math.random()*nominees.length)];
+    walker.active=false; walker.selfEvicted=true; walker.nominated=false;
+    s.nominees=s.nominees.filter(id=>id!==walker.id);
+    log(s,{week:1,phase:"standard",type:"self-eviction",selfEvictedId:walker.id,
+      title:"Self-Eviction — Houseguest Walks",
+      lines:[`${displayName(walker)} chooses to self-evict from the Big Brother house.`,
+        "The self-eviction does not count as a normal eviction, does not create a jury member, and does not receive a placement."]});
+
+    const hoh=hg(s,s.currentHOH);
+    const replacementPool=living(s).filter(h=>h.id!==hoh?.id&&!s.nominees.includes(h.id)&&h.slot!==17&&!h.safe);
+    const replacement=R().pickReplacement(s,hoh,replacementPool,[]);
+    if(replacement){
+      replacement.nominated=true;
+      s.nominees.push(replacement.id);
+      log(s,{week:1,phase:"standard",type:"replacement-nomination",hohId:hoh?.id||null,
+        nomineeIds:[...s.nominees],replacementId:replacement.id,title:"Replacement Nomination",
+        lines:[`${displayName(hoh)} names ${displayName(replacement)} as the replacement nominee for ${displayName(walker)}.`]});
+    }
+    return {walker,replacement};
+  }
+
   function runCycle(s,week,cycle=1){
     s.week=week;s.phase=cycle>1?'double-eviction':'in-season';resetFlags(s);
     let hoh;
@@ -200,7 +283,24 @@
     if(week===10&&cycle===1&&living(s).length>3)runCycle(s,week,2);
   }
   function runPremiere(s){
-    s.week=1;s.phase='premiere';resetFlags(s);const money=chooseFirstTemptation(s);runHitTheRoad(s);const hoh=runFirstHOH(s);runNominations(s,1);const players=selectPOVPlayers(s,1);const veto=runPOV(s,1,players);applyVeto(s,1,veto.winner);eviction(s,1,1);
+    s.week=1;s.phase="premiere";resetFlags(s);
+    chooseFirstTemptation(s);
+    runFriendshipBracelets(s);
+    runHitTheRoad(s);
+    // The opening three-nominee eviction occurs before the first regular HOH.
+    eviction(s,1,0);
+
+    // The regular Week 1 cycle now begins with the first HOH. This mirrors the
+    // real BB19 chronology while allowing the custom slot-17 entrant to vote.
+    s.phase="in-season";
+    resetFlags(s);
+    runFirstHOH(s);
+    runNominations(s,1);
+    runFirstWeekSelfEviction(s);
+    const players=selectPOVPlayers(s,1);
+    const veto=runPOV(s,1,players);
+    applyVeto(s,1,veto.winner);
+    eviction(s,1,1);
   }
   function runFinale(s){
     s.week='Final';s.phase='finale';const three=living(s);if(three.length!==3)return;
@@ -214,7 +314,7 @@
     s.finale={winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalHohId:finalHoh.id,votes:tally,jurySize:jurors.length,prize:750000,runnerUpPrize:75000,americasFavoritePrize:50000,americasFavoriteId:afpId};s.phase='complete';log(s,{week:'Final',phase:'finale',type:'winner',winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalistIds:[winnerId,runnerId],afpId,title:`${displayName(hg(s,winnerId))} Wins Big Brother!`,lines:[`By a vote of ${tally[winnerId]}-${tally[runnerId]}, ${displayName(hg(s,winnerId))} wins Big Brother.`,`${displayName(hg(s,runnerId))} finishes as the Runner-Up.`,`America's Favorite Player: ${displayName(hg(s,afpId))}.`]});
   }
   function simulateSeason(s,config){
-    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.temptationCompetitionUnlocked=false;s.houseguests.forEach(h=>{h.active=h.slot!==17;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
+    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.temptationCompetitionUnlocked=false;s.houseguests.forEach(h=>{h.active=h.slot!==17;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.selfEvicted=false;h.friendshipBracelet=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
     runPremiere(s);let week=2,guard=0;while(living(s).length>3&&week<=18&&guard<24){runCycle(s,week,1);week++;guard++;}runFinale(s);if(window.LiveFeeds?.addToSeason)window.LiveFeeds.addToSeason(s);return s;
   }
   window.SeasonEngine={simulateSeason,displayName,ordinal};

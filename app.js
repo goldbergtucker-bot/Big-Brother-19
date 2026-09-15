@@ -42,6 +42,21 @@
   };
   const displayText = text => {
     let out = String(text ?? "");
+
+    // Event/state records store intendedTarget as a Houseguest ID (for example
+    // "hg-11"). Resolve that ID before rendering the Target panel so the UI
+    // shows the actual Houseguest name instead of the internal ID.
+    const direct = (state.houseguests || []).find(h => h.id === out);
+    if (direct) return displayName(direct);
+
+    // Also resolve IDs embedded inside target-history style text.
+    [...(state.houseguests || [])]
+      .sort((a,b)=>String(b.id || "").length-String(a.id || "").length)
+      .forEach(h=>{
+        if (h.id) out=out.split(h.id).join(displayName(h));
+      });
+
+    // Preserve the existing full-name -> display-name conversion.
     [...(state.houseguests || [])]
       .sort((a,b)=>name(b).length-name(a).length)
       .forEach(h=>{

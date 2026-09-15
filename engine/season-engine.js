@@ -139,20 +139,30 @@
     let power=null;
     if(accepted){
       if(cfg.id==='pendant'){
-        power={type:'pendant',ownerId:chosen.id,wonWeek:week,expiresWeek:week+2,used:false};chosen.pendantUntil=week+2;
-        // The Week 1 Pendant is the BB19-style protection only. It does not
-        // create an additional nomination curse, because the first regular
-        // veto must have exactly six players: HOH, two nominees, and three
-        // randomly selected players. Later Pendant implementations may carry
-        // their own separate effects if configured.
-        if(week>1){
-          const cursePool=living(s).filter(h=>h.id!==chosen.id);const cursed=shuffle(cursePool)[0];if(cursed){cursed.nominationCurseUntil=week+2;power.cursedId=cursed.id;}
+        // BB19 Week 1: the Pendant protects the holder from the next three
+        // evictions, while a separate Houseguest receives the nomination curse.
+        power={type:'pendant',ownerId:chosen.id,wonWeek:week,expiresWeek:week+2,used:false};
+        chosen.pendantUntil=week+2;
+        const cursePool=living(s).filter(h=>h.id!==chosen.id);
+        const cursed=shuffle(cursePool)[0];
+        if(cursed){
+          cursed.nominationCurseUntil=week+3;
+          cursed.usedNominationCurse=false;
+          power.cursedId=cursed.id;
         }
       } else if(cfg.id==='ring'){
+        // BB19 Week 2: the Ring of Replacement lets its holder replace one
+        // randomly selected Veto player with themselves. Its consequence is
+        // the Ve-Toad punishment applied to three other Houseguests.
         power={type:'ring',ownerId:chosen.id,wonWeek:week,expiresWeek:week,used:false};
-        const curse=shuffle(living(s).filter(h=>h.id!==chosen.id)).slice(0,3).map(h=>h.id);power.curseIds=curse;
+        const curse=shuffle(living(s).filter(h=>h.id!==chosen.id)).slice(0,3).map(h=>h.id);
+        power.curseIds=curse;
+        curse.forEach(id=>{const h=hg(s,id);if(h)h.veToadUntil=week;});
       } else {
-        power={type:'halting-hex',ownerId:chosen.id,wonWeek:week,expiresWeek:week+3,used:false};s.temptationCompetitionUnlocked=true;
+        // BB19 Week 3: the Halting Hex unlocks the Temptation Competition
+        // for Weeks 5, 6 and 7. It does not create another curse.
+        power={type:'halting-hex',ownerId:chosen.id,wonWeek:week,expiresWeek:week+3,used:false};
+        s.temptationCompetitionUnlocked=true;
       }
       s.powers.push(power);
     }
@@ -162,7 +172,7 @@
   function runNominations(s,week){
     const hoh=hg(s,s.currentHOH);let pool=living(s).filter(h=>h.id!==hoh.id&&!h.safe&&!((h.pendantUntil||0)>=week));
     // Nomination curse: one cursed HG must volunteer as a third nominee over the first three weeks.
-    const cursed=pool.find(h=>(h.nominationCurseUntil||0)>=week&&!h.usedNominationCurse);
+    const cursed=week>=2 ? pool.find(h=>(h.nominationCurseUntil||0)>=week&&!h.usedNominationCurse) : null;
     const nominees=R().pickNominees(s,hoh,pool,2).filter(Boolean);
     let final=[...new Map(nominees.map(h=>[h.id,h])).values()];
     while(final.length<2){const x=shuffle(pool.filter(h=>!final.some(n=>n.id===h.id)))[0];if(!x)break;final.push(x);}

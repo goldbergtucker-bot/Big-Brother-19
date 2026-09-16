@@ -145,3 +145,41 @@ button,input,select,textarea { box-sizing:border-box; max-width:100%; }
 @media (max-width:360px){
   .houseguest-grid,.hg-grid,.memory-wall,.memory-wall-grid,.cast-grid,.relationship-grid,.alliance-grid,.status-row,.status-grid,.stats-grid,.settings-grid { grid-template-columns:1fr !important; }
 }
+
+
+/* =========================================================
+   FINAL TWO + JURY VOTING — DEDICATED SCREEN
+   ========================================================= */
+.jury-vote-screen{width:100%;max-width:1050px;margin:0 auto;padding:4px 0 10px}
+.jury-vote-screen-header{text-align:center;margin:0 auto 16px}
+.jury-vote-screen-kicker{font-size:10px;font-weight:950;letter-spacing:2px;color:#f3c65a}
+.jury-vote-screen-header h3{margin:5px 0;font-size:22px}
+.jury-vote-screen-header p{margin:4px auto 0;max-width:650px;color:var(--muted);font-size:12px}
+.jury-finalists-screen{margin-bottom:24px;padding:20px}
+.jury-finalists-screen .player-card{width:220px}
+.jury-finalists-screen .portrait-box{height:270px}
+.jury-finalists-screen .player-card strong{font-size:17px}
+.jury-voting-header{border-top:1px solid var(--line);padding-top:22px}
+.jury-vote-list{display:grid;gap:12px}
+.jury-vote-row{min-height:105px}
+.jury-voter,.jury-target{display:flex;align-items:center;gap:14px;min-width:0}
+.jury-vote-person-portrait{width:70px;height:84px;flex:0 0 70px}
+.jury-vote-portrait{width:100%;height:100%;object-fit:cover;border-radius:8px;background:#202736;border:1px solid #39445a}
+.jury-voter strong,.jury-target strong{font-size:14px}
+.jury-voter span,.jury-target span{display:block}
+.jury-no-votes{text-align:center;padding:30px;color:var(--muted);border:1px solid var(--line);border-radius:10px}
+@media(max-width:800px){
+  .jury-finalists-screen{gap:12px;padding:12px}
+  .jury-finalists-screen .player-card{width:145px}
+  .jury-finalists-screen .portrait-box{height:185px}
+  .jury-vote-row{grid-template-columns:1fr!important;justify-items:center;text-align:center;padding:14px}
+  .jury-voter,.jury-target{width:100%;justify-content:center;flex-direction:column;gap:7px}
+  .jury-vote-arrow{order:2;padding:4px 0}
+  .jury-voter{order:1}
+  .jury-target{order:3}
+  .jury-vote-person-portrait{width:82px;height:96px;flex-basis:82px}
+}
+@media(max-width:380px){
+  .jury-finalists-screen .player-card{width:125px}
+  .jury-finalists-screen .portrait-box{height:160px}
+}

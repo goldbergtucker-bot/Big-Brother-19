@@ -7,7 +7,7 @@ window.BB19_CONFIG = Object.freeze({
   ratingKeys: ["general","physical","mental","social","strategic"],
   relationshipKeys: ["friendship","trust","loyalty","rivalry","respect","attraction"],
   juryThresholdPlacement: 11,
-  doubleEvictionWeeks: [10],
+  doubleEvictionWeeks: [10], // Week 7 double eviction removed; Week 10 is the only scheduled double eviction.
   denOfTemptation: {
     weeks: [1,2,3],
     temptations: [
@@ -90,7 +90,7 @@ window.BB19_CONFIG = Object.freeze({
     "Temptation Competition runs Weeks 5-7",
     "Battle Back occurs after the fourth eviction",
     "Tree of Temptation runs Weeks 8-10",
-    "Double Eviction occurs in Week 10",
+    "No Double Eviction occurs in Week 7; the only scheduled Double Eviction is Week 10",
     "Nine-person jury: 3rd through 11th place",
     "Final HOH uses Parts 1-3"
   ]

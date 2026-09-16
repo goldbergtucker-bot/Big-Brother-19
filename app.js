@@ -400,8 +400,15 @@
     }
     const e=history[index], view=e.snapshot;
     eventKicker.textContent=`${weekLabel(e.week)}  •  ${(e.phase||"EVENT").replaceAll("-"," ").toUpperCase()}`;
-    eventTitle.textContent=e.title;
-    eventBody.innerHTML=(e.type==="live-feed"||e.type==="live-feed-day") ? liveFeedCard(e) : ((e.type==="jury-vote"||e.type==="jury-voting") ? juryVoteScreen(e,view) : `${eventData(e,view)}${eventText(e)}`);
+    if(e.type==="winner"){
+      eventKicker.textContent="FINALE  •  RESULTS";
+      eventTitle.textContent="Final Placements";
+      const final=(view?.houseguests||state.houseguests).slice().sort((a,b)=>(a.placement||99)-(b.placement||99));
+      eventBody.innerHTML=finalPlacementsScreen(final, state.finale||{}, view);
+    } else {
+      eventTitle.textContent=e.title;
+      eventBody.innerHTML=(e.type==="live-feed"||e.type==="live-feed-day") ? liveFeedCard(e) : ((e.type==="jury-vote"||e.type==="jury-voting") ? juryVoteScreen(e,view) : `${eventData(e,view)}${eventText(e)}`);
+    }
     eventCounter.textContent=`${index+1} / ${history.length}`;
   }
   function statusBadge(h,view){
@@ -418,16 +425,69 @@
   }
   function renderTimeline(){timeline.innerHTML=history.map((e,i)=>{const revealed=i<=pointer;const title=revealed?e.title:"Locked Event";const week=revealed?weekLabel(e.week):"UNREVEALED";return `<button class="timeline-item ${i===pointer?"selected":""} ${revealed?"revealed":"locked"}" data-index="${i}"><span>${i+1}</span><div><strong>${esc(title)}</strong><small>${esc(week)}</small></div></button>`;}).join("");}
   function resultsUnlocked(){return pointer>=0&&pointer===history.length-1&&history[pointer]?.type==="winner";}
+  function placementVoteText(h, final, finale) {
+    if (!h) return "";
+    if (h.placement === 1 || h.placement === 2) {
+      const juryEvent = history.slice().reverse().find(e => e.type === "jury-vote" || e.type === "jury-voting");
+      const votes = juryEvent?.data?.votes || juryEvent?.votes || [];
+      const count = votes.filter(v => v.targetId === h.id).length;
+      return `${count} Vote${count === 1 ? "" : "s"}`;
+    }
+    if (h.selfEvicted) return "Self-Evicted";
+    if (h.placement === 3) return "1-0 Vote";
+
+    const evictionEvent = history.slice().reverse().find(e =>
+      e.type === "eviction" &&
+      (e.data?.evictedId || e.evictedId) === h.id
+    );
+    if (evictionEvent) {
+      const d = evictionEvent.data || evictionEvent;
+      let out = Number(d.evictedVoteCount);
+      let stay = Number(d.stayVoteCount);
+      if (!Number.isFinite(out) || !Number.isFinite(stay)) {
+        const votes = d.votes || [];
+        const counts = {};
+        votes.forEach(v => { counts[v.targetId] = (counts[v.targetId] || 0) + 1; });
+        out = Number(counts[h.id] || 0);
+        const nomineeIds = d.nomineeIds || [];
+        const stayId = nomineeIds.find(id => id !== h.id);
+        stay = stayId ? Number(counts[stayId] || 0) : 0;
+      }
+      if (Number.isFinite(out) && Number.isFinite(stay)) {
+        return `${out}-${stay} Vote`;
+      }
+    }
+    return "";
+  }
+
+  function finalPlacementsScreen(final, finale, sourceView) {
+    const sorted = final.slice().sort((a,b) => (a.placement || 99) - (b.placement || 99));
+    const cards = sorted.map(h => {
+      const p = Number(h.placement);
+      let placeLabel = p === 1 ? "Winner" : p === 2 ? "Runner Up" : p === 3 ? "3rd Place" : p === 4 ? "4th Place" : p === 5 ? "5th Place" : p === 6 ? "6th Place" : p === 7 ? "7th Place" : p === 8 ? "8th Place" : p === 9 ? "9th Place" : p === 10 ? "10th Place" : p === 11 ? "11th Place" : p === 12 ? "12th Place" : p === 13 ? "13th Place" : p === 14 ? "14th Place" : p === 15 ? "15th Place" : p === 16 ? "16th Place" : "17th Place";
+      const voteText = placementVoteText(h, sorted, finale);
+      return `<article class="final-placement-card">
+        ${portrait(h,"final-placement-portrait")}
+        <div class="final-placement-name">${esc(name(h))}</div>
+        <div class="final-placement-place">${placeLabel}</div>
+        <div class="final-placement-votes">${esc(voteText)}</div>
+      </article>`;
+    }).join("");
+    return `<section class="final-placements-screen">
+      <div class="final-placements-grid">${cards}</div>
+    </section>`;
+  }
+
   function renderStats(){
     if(!resultsUnlocked()){
       tabContent.innerHTML=`<div class="tab-panel results-locked"><div class="results-lock-icon">🔒</div><h2>Season Results Locked</h2><p>The final placements and winner stay hidden until you actually reach the final winner reveal.</p></div>`;
       return;
     }
     const final=state.houseguests.slice().sort((a,b)=>(a.placement||99)-(b.placement||99));
-    const f=state.finale||{},winner=byId(null,f.winnerId),runner=byId(null,f.runnerUpId),afp=byId(null,f.americasFavoriteId);
-    const awardCards=`<div class="final-awards">${winner?`<div class="final-award winner-award"><span>WINNER</span>${portrait(winner,"award-portrait")}<strong>${esc(name(winner))}</strong><small>$750,000</small></div>`:""}${runner?`<div class="final-award runner-award"><span>RUNNER-UP</span>${portrait(runner,"award-portrait")}<strong>${esc(name(runner))}</strong><small>$75,000</small></div>`:""}${afp?`<div class="final-award afp-award"><span>AMERICA'S FAVORITE PLAYER</span>${portrait(afp,"award-portrait")}<strong>${esc(name(afp))}</strong><small>$50,000</small></div>`:""}</div>`;
-    tabContent.innerHTML=`<div class="tab-panel"><h2>Season Results</h2>${awardCards}<h3 class="results-subhead">Final Placements</h3><div class="results-grid">${final.map(h=>`<div class="result-card"><b>${h.placement?ordinal(h.placement):"—"}</b>${portrait(h,"result-portrait")}<strong>${esc(name(h))}</strong>${h.juryMember?"<small>Jury</small>":""}</div>`).join("")}</div></div>`;
+    const f=state.finale||{};
+    tabContent.innerHTML=`<div class="tab-panel final-results-tab"><h2>Final Placements</h2>${finalPlacementsScreen(final,f,state)}</div>`;
   }
+
   function renderAlliances(){
     const a=state.alliances||[];
     const relationshipNote=state.season.relationshipsCustomized?"Custom starting relationships are active.":"Starting relationships are randomized when you simulate.";

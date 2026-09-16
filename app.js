@@ -485,7 +485,26 @@
     }
     const final=state.houseguests.slice().sort((a,b)=>(a.placement||99)-(b.placement||99));
     const f=state.finale||{};
-    tabContent.innerHTML=`<div class="tab-panel final-results-tab"><h2>Final Placements</h2>${finalPlacementsScreen(final,f,state)}</div>`;
+    const winner=byId(null,f.winnerId);
+    const runner=byId(null,f.runnerUpId);
+    const afp=byId(null,f.americasFavoriteId);
+    const summaryCard=(h,label,sub)=>h?`<article class="overall-result-card">${portrait(h,"overall-result-portrait")}<div class="overall-result-label">${esc(label)}</div><strong>${esc(name(h))}</strong>${sub?`<span>${esc(sub)}</span>`:""}</article>`:"";
+    const winnerVotes=Number(f.votes?.[f.winnerId]||0);
+    const runnerVotes=Number(f.votes?.[f.runnerUpId]||0);
+    tabContent.innerHTML=`<div class="tab-panel final-results-tab season-results-page">
+      <section class="overall-results">
+        <div class="overall-results-heading"><span>SEASON RESULTS</span><h2>BIG BROTHER 19</h2></div>
+        <div class="overall-results-grid">
+          ${summaryCard(winner,"WINNER",`${winnerVotes} Jury Votes`)}
+          ${summaryCard(runner,"RUNNER UP",`${runnerVotes} Jury Votes`)}
+          ${summaryCard(afp,"AMERICA'S FAVORITE PLAYER","")}
+        </div>
+      </section>
+      <section class="final-placements-results">
+        <h2>Final Placements</h2>
+        ${finalPlacementsScreen(final,f,state)}
+      </section>
+    </div>`;
   }
 
   function renderAlliances(){
@@ -575,6 +594,8 @@
   }
 
   function renderTab(){
+    const resultsMode=activeTab==="stats";
+    seasonView.classList.toggle("season-results-mode",resultsMode);
     if(activeTab==="stats")renderStats(); else if(activeTab==="weekly-summary")renderWeeklySummary(); else if(activeTab==="alliances")renderAlliances(); else {tabContent.innerHTML="";tabContent.classList.add("hidden");return;} tabContent.classList.remove("hidden");
   }
   function updateSeasonUI(){

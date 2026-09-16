@@ -183,3 +183,162 @@ button,input,select,textarea { box-sizing:border-box; max-width:100%; }
   .jury-finalists-screen .player-card{width:125px}
   .jury-finalists-screen .portrait-box{height:160px}
 }
+
+
+/* =========================================================
+   FINAL PLACEMENTS — BRANTSTEELE-STYLE RESULTS WALL
+   ========================================================= */
+
+.final-results-tab {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+.final-results-tab > h2 {
+    text-align: center;
+    margin: 0 0 24px;
+    font-size: 28px;
+}
+
+.final-placements-screen {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.final-placements-grid {
+    width: min(1160px, 100%);
+    display: grid;
+    grid-template-columns: repeat(5, minmax(150px, 180px));
+    justify-content: center;
+    column-gap: 54px;
+    row-gap: 34px;
+    padding: 4px 0 20px;
+}
+
+.final-placement-card {
+    width: 180px;
+    text-align: center;
+    color: #fff;
+    align-self: start;
+}
+
+.final-placement-portrait {
+    display: block;
+    width: 180px;
+    height: 180px;
+    object-fit: cover;
+    object-position: center;
+    border: 1px solid #080808;
+    border-radius: 0;
+    margin: 0 auto 8px;
+    background: #2bb8e7;
+}
+
+.final-placement-card .placeholder-portrait {
+    display: grid;
+    place-items: center;
+    width: 180px;
+    height: 180px;
+    margin: 0 auto 8px;
+    border: 1px solid #080808;
+    border-radius: 0;
+    background: #2bb8e7;
+    color: #fff;
+    font-size: 42px;
+    font-weight: 900;
+}
+
+.final-placement-name,
+.final-placement-place,
+.final-placement-votes {
+    color: #fff;
+    font-weight: 800;
+    line-height: 1.16;
+    text-shadow: 0 1px 2px rgba(0,0,0,.45);
+}
+
+.final-placement-name {
+    font-size: 21px;
+    min-height: 24px;
+}
+
+.final-placement-place {
+    font-size: 21px;
+}
+
+.final-placement-votes {
+    font-size: 21px;
+    margin-top: 2px;
+}
+
+.final-placement-card:nth-child(16) {
+    grid-column: 2;
+}
+
+.final-placement-card:nth-child(17) {
+    grid-column: 4;
+}
+
+/* Remove the normal dark result-card treatment when this screen is used. */
+.final-results-tab .final-placements-grid .result-card {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
+@media (max-width: 1050px) {
+    .final-placements-grid {
+        grid-template-columns: repeat(4, minmax(140px, 180px));
+        column-gap: 28px;
+    }
+    .final-placement-card:nth-child(16),
+    .final-placement-card:nth-child(17) {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 760px) {
+    .final-placements-grid {
+        grid-template-columns: repeat(3, minmax(120px, 1fr));
+        column-gap: 16px;
+        row-gap: 24px;
+    }
+    .final-placement-card {
+        width: 100%;
+    }
+    .final-placement-portrait,
+    .final-placement-card .placeholder-portrait {
+        width: min(180px, 100%);
+        height: auto;
+        aspect-ratio: 1;
+    }
+    .final-placement-name,
+    .final-placement-place,
+    .final-placement-votes {
+        font-size: clamp(14px, 3.4vw, 19px);
+    }
+    .final-placement-card:nth-child(16),
+    .final-placement-card:nth-child(17) {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .final-results-tab > h2 {
+        font-size: 23px;
+        margin-bottom: 16px;
+    }
+    .final-placements-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 12px;
+        row-gap: 22px;
+    }
+    .final-placement-name,
+    .final-placement-place,
+    .final-placement-votes {
+        font-size: 15px;
+    }
+}

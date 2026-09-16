@@ -236,7 +236,26 @@
     }
     if (entry.type === "jury-vote") {
       const votes = d.votes || [];
-      body += `<div class="vote-list jury-votes">${votes.map(v=>{const juror=byId(view,v.voterId),target=byId(view,v.targetId);return `<div class="vote-row"><div class="vote-person">${portrait(juror,"vote-portrait")}<strong>${esc(displayName(juror))}</strong></div><div class="vote-arrow">VOTES FOR</div><div class="vote-person target">${portrait(target,"vote-portrait")}<strong>${esc(displayName(target))}</strong></div></div>`}).join("")}</div>`;
+      const finalistIds = d.finalistIds || [];
+      const finalists = finalistIds.map(id=>byId(view,id)).filter(Boolean);
+      const jurors = votes.map(v=>byId(view,v.voterId)).filter(Boolean);
+      body += `<section class="jury-vote-panel">
+        <div class="jury-finalists-heading">
+          <span class="ceremony-label">FINAL TWO</span>
+          <h3>THE FINALISTS</h3>
+          <p>The Jury will now vote for the winner of Big Brother.</p>
+        </div>
+        <div class="jury-finalists">${finalists.map(h=>card(h,"FINALIST")).join("")}</div>
+        <div class="jury-vote-heading">
+          <span class="ceremony-label">JURY VOTING</span>
+          <h3>HOW EACH JUROR VOTED</h3>
+        </div>
+        <div class="jury-vote-list">${votes.map(v=>{const juror=byId(view,v.voterId),target=byId(view,v.targetId);return `<div class="jury-vote-row">
+          <div class="jury-voter">${portrait(juror,"jury-vote-portrait")}<div><span>JUROR</span><strong>${esc(displayName(juror))}</strong></div></div>
+          <div class="jury-vote-arrow">VOTES FOR<br><b>WINNER</b></div>
+          <div class="jury-target">${portrait(target,"jury-vote-portrait")}<div><span>VOTED FOR</span><strong>${esc(displayName(target))}</strong></div></div>
+        </div>`}).join("")}</div>
+      </section>`;
       return body;
     }
     if (entry.type === "eviction") {

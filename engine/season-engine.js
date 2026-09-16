@@ -21,6 +21,10 @@
     if(e.evictedId!=null)d.evictedId=e.evictedId;
     if(e.runnerUpId!=null)d.runnerUpId=e.runnerUpId;
     if(e.thirdPlaceId!=null)d.thirdPlaceId=e.thirdPlaceId;
+    if(e.selfEvictedId!=null)d.selfEvictedId=e.selfEvictedId;
+    if(e.challengerId!=null)d.challengerId=e.challengerId;
+    if(e.battleBackWinnerId!=null)d.battleBackWinnerId=e.battleBackWinnerId;
+    if(e.voteRecords)d.voteRecords=[...e.voteRecords];
     if(e.entrantId!=null)d.entrantId=e.entrantId;
     if(e.recipientIds)d.recipientIds=[...e.recipientIds];
     if(e.participants)d.participants=[...e.participants];
@@ -33,7 +37,7 @@
   }
   function log(s,e){const r={id:s.history.length+1,...e};r.snapshot=snapshot(s);r.data=eventData(s,r);s.history.push(r);}
   function ensureState(s){s.targetHistory=s.targetHistory||[];s.powers=s.powers||[];s.temptations=s.temptations||[];s.jury=s.jury||[];s.evicted=s.evicted||[];s.nominees=s.nominees||[];s.povPlayers=s.povPlayers||[];s.vetoWinners=s.vetoWinners||[];s.evictionVotes=s.evictionVotes||[];s.alliances=s.alliances||[];}
-  function resetFlags(s){s.houseguests.forEach(h=>{h.safe=false;h.nominated=false;});}
+  function resetFlags(s){s.houseguests.forEach(h=>{h.safe=false;h.nominated=false;h.thirdNominee=false;h.temtpNominee=false;});}
   function chooseFirstTemptation(s){
     // BB19 premiere format: the first 16 houseguests begin the game.
     // The $25,000 is always taken; only the first presser is randomized.
@@ -176,7 +180,7 @@
     const nominees=R().pickNominees(s,hoh,pool,2).filter(Boolean);
     let final=[...new Map(nominees.map(h=>[h.id,h])).values()];
     while(final.length<2){const x=shuffle(pool.filter(h=>!final.some(n=>n.id===h.id)))[0];if(!x)break;final.push(x);}
-    if(cursed&&!final.some(h=>h.id===cursed.id)){final.push(cursed);cursed.usedNominationCurse=true;}
+    if(cursed&&!final.some(h=>h.id===cursed.id)){final.push(cursed);cursed.usedNominationCurse=true;cursed.thirdNominee=true;cursed.thirdNomineeSource='nomination-curse';}
     s.nominees=final.map(h=>h.id);final.forEach(h=>h.nominated=true);
     const targetPlan=R().planBackdoor(s,hoh,final);
     s.backdoorPlanActive=!!targetPlan.use;s.backdoorTargetId=targetPlan.target?.id||null;
@@ -191,16 +195,35 @@
     if(entrants.length<3)entrants.push(...shuffle(eligible.filter(h=>!entrants.includes(h))).slice(0,Math.min(3-entrants.length,eligible.length)));
     if(!entrants.length)return null;
     const comp=C().runCompetition(entrants,{week,type:'temptation'});const ranking=comp.ranking||[];const loserId=ranking[ranking.length-1]?.id;const winner=comp.winner;winner.safe=true;
-    let third=null;if(loserId){const loser=hg(s,loserId);if(loser&&loser.id!==winner.id){loser.nominated=true;loser.temtpNominee=true;third=loser;if(!s.nominees.includes(loser.id))s.nominees.push(loser.id);}}
+    let third=null;if(loserId){const loser=hg(s,loserId);if(loser&&loser.id!==winner.id){loser.nominated=true;loser.temtpNominee=true;loser.thirdNominee=true;loser.thirdNomineeSource='temptation-competition';third=loser;if(!s.nominees.includes(loser.id))s.nominees.push(loser.id);}}
     log(s,{week,phase:'temptation',type:'temptation-competition',winnerId:winner.id,participants:entrants.map(h=>h.id),loserId:third?.id||null,competition:comp,title:`Temptation Competition — ${comp.label}`,lines:[`${displayName(winner)} wins the Temptation Competition and is immune for the week.`,third?`${displayName(third)} finishes last and becomes the third nominee.`:`No third nominee is created.`]});
     return {winner,third};
   }
   function selectPOVPlayers(s,week){
-    const hoh=hg(s,s.currentHOH);const nominees=s.nominees.map(id=>hg(s,id)).filter(Boolean);let pool=living(s).filter(h=>h.id!==hoh.id&&!nominees.some(n=>n.id===h.id));
-    const ring=s.powers.find(p=>p.type==='ring'&&!p.used&&p.ownerId&&p.expiresWeek>=week);if(ring&&Math.random()<0.55){ring.used=true;const owner=hg(s,ring.ownerId);if(owner&&!nominees.some(n=>n.id===owner.id)){const replace=shuffle(pool)[0];if(replace){pool=pool.filter(x=>x.id!==replace.id);pool.push(owner);log(s,{week,phase:'temptation',type:'ring-replacement',winnerId:owner.id,replacedId:replace.id,title:'Ring of Replacement',lines:[`${displayName(owner)} uses the Ring of Replacement and takes ${displayName(replace)}'s POV spot.`]});}}}
-    const selected=shuffle(pool).slice(0,Math.min(3,pool.length));const participants=[hoh,...nominees,...selected].filter((h,i,a)=>a.findIndex(x=>x.id===h.id)===i);
+    const hoh=hg(s,s.currentHOH);
+    const nominees=s.nominees.map(id=>hg(s,id)).filter(Boolean);
+    let pool=living(s).filter(h=>h.id!==hoh.id&&!nominees.some(n=>n.id===h.id));
+    const ring=s.powers.find(p=>p.type==='ring'&&!p.used&&p.ownerId&&p.expiresWeek>=week);
+    if(ring&&Math.random()<0.55){
+      ring.used=true;
+      const owner=hg(s,ring.ownerId);
+      if(owner&&!nominees.some(n=>n.id===owner.id)&&owner.id!==hoh.id){
+        const replace=shuffle(pool)[0];
+        if(replace){
+          pool=pool.filter(x=>x.id!==replace.id);
+          pool.push(owner);
+          log(s,{week,phase:'temptation',type:'ring-replacement',winnerId:owner.id,replacedId:replace.id,title:'Ring of Replacement',lines:[`${displayName(owner)} uses the Ring of Replacement and takes ${displayName(replace)}'s POV spot.`]});
+        }
+      }
+    }
+    // Big Brother 19 has six Veto players. With a third nominee, the HOH and
+    // all three nominees are already four automatic players, so only TWO more
+    // Houseguests are selected. With two nominees, THREE more are selected.
+    const pickedCount=nominees.length>=3?2:3;
+    const selected=shuffle(pool).slice(0,Math.min(pickedCount,pool.length));
+    const participants=[hoh,...nominees,...selected].filter((h,i,a)=>a.findIndex(x=>x.id===h.id)===i);
     s.povPlayers=participants.map(h=>h.id);
-    log(s,{week,phase:'standard',type:'pov-players',hohId:hoh.id,nomineeIds:[...s.nominees],povPlayers:s.povPlayers,title:'Power of Veto — Picked Players',lines:[`The Power of Veto players are ${participants.map(displayName).join(', ')}.`]});
+    log(s,{week,phase:'standard',type:'pov-players',hohId:hoh.id,nomineeIds:[...s.nominees],povPlayers:s.povPlayers,title:'Power of Veto — Picked Players',lines:[`The Power of Veto players are ${participants.map(displayName).join(', ')}.`,`Six Houseguests compete for the Power of Veto${nominees.length>=3?' (HOH + 3 nominees + 2 picked players).':' (HOH + 2 nominees + 3 picked players).'}`]});
     return participants;
   }
   function runPOV(s,week,participants){const comp=C().runCompetition(participants,{week,type:'pov'});const winner=comp.winner;s.vetoWinners=[winner.id];log(s,{week,phase:'standard',type:'pov',winnerId:winner.id,participants:participants.map(h=>h.id),competition:comp,title:`Power of Veto — ${comp.label}`,lines:[`${displayName(winner)} wins the Power of Veto.`]});return {winner,comp};}
@@ -211,17 +234,34 @@
     return R().decideVetoUse(s,winner,hoh,nominees);
   }
   function applyVeto(s,week,winner){
-    const hoh=hg(s,s.currentHOH),nominees=s.nominees.map(id=>hg(s,id)).filter(Boolean);const decision=chooseVetoUse(s,week,winner);let replacement=null;
-    if(decision.use){const saved=hg(s,decision.saveId);if(saved&&nominees.some(n=>n.id===saved.id)){
-      saved.nominated=false;s.nominees=s.nominees.filter(id=>id!==saved.id);
-      let pool=living(s).filter(p=>p.id!==hoh.id&&!p.safe&&!s.nominees.includes(p.id)&&p.id!==saved.id&&p.id!==winner.id&&!((p.pendantUntil||0)>=week));
-      // Never allow the veto holder to become the replacement nominee.
-      replacement=s.backdoorPlanActive&&s.backdoorTargetId&&pool.some(p=>p.id===s.backdoorTargetId)?hg(s,s.backdoorTargetId):R().pickReplacement(s,hoh,pool,[]);
-      if(replacement){replacement.nominated=true;s.nominees.push(replacement.id);if(replacement.id===s.backdoorTargetId)s.targetHistory.push({name:displayName(replacement),reason:'backdoor replacement'});}
-      if(s.backdoorTargetId&&replacement?.id===s.backdoorTargetId){s.intendedTarget=s.backdoorTargetId;}
-      log(s,{week,phase:'standard',type:'veto-ceremony',hohId:hoh.id,winnerId:winner.id,savedId:saved.id,replacementId:replacement?.id||null,vetoUsed:true,title:'Veto Ceremony',vetoUsed:true,lines:[`${displayName(winner)} uses the Power of Veto on ${displayName(saved)}.`,replacement?`${displayName(hoh)} names ${displayName(replacement)} as the replacement nominee.`:`No replacement nominee is required.`]});
-      return;
-    }}
+    const hoh=hg(s,s.currentHOH),nominees=s.nominees.map(id=>hg(s,id)).filter(Boolean);
+    const decision=chooseVetoUse(s,week,winner);
+    let replacement=null;
+    if(decision.use){
+      const saved=hg(s,decision.saveId);
+      if(saved&&nominees.some(n=>n.id===saved.id)){
+        const wasThirdNominee=!!saved.thirdNominee;
+        saved.nominated=false;
+        s.nominees=s.nominees.filter(id=>id!==saved.id);
+
+        // BB19 third-nominee rule: the HOH did not nominate the third nominee,
+        // so if that third nominee is removed by the Veto, there is NO replacement.
+        // The two original nominees simply remain the final nominees.
+        if(wasThirdNominee){
+          s.nominees=s.nominees.filter(id=>{const h=hg(s,id);return h?.active;});
+          log(s,{week,phase:'standard',type:'veto-ceremony',hohId:hoh.id,winnerId:winner.id,savedId:saved.id,replacementId:null,vetoUsed:true,thirdNomineeSaved:true,title:'Veto Ceremony',vetoUsed:true,lines:[`${displayName(winner)} uses the Power of Veto on the third nominee, ${displayName(saved)}.`,`Because ${displayName(saved)} was the third nominee created by a twist, the HOH does not name a replacement. The two original nominees remain on the block.`]});
+          return;
+        }
+
+        let pool=living(s).filter(p=>p.id!==hoh.id&&!p.safe&&!s.nominees.includes(p.id)&&p.id!==saved.id&&p.id!==winner.id&&!((p.pendantUntil||0)>=week));
+        // Never allow the veto holder to become the replacement nominee.
+        replacement=s.backdoorPlanActive&&s.backdoorTargetId&&pool.some(p=>p.id===s.backdoorTargetId)?hg(s,s.backdoorTargetId):R().pickReplacement(s,hoh,pool,[]);
+        if(replacement){replacement.nominated=true;s.nominees.push(replacement.id);if(replacement.id===s.backdoorTargetId)s.targetHistory.push({name:displayName(replacement),reason:'backdoor replacement'});}
+        if(s.backdoorTargetId&&replacement?.id===s.backdoorTargetId){s.intendedTarget=s.backdoorTargetId;}
+        log(s,{week,phase:'standard',type:'veto-ceremony',hohId:hoh.id,winnerId:winner.id,savedId:saved.id,replacementId:replacement?.id||null,vetoUsed:true,title:'Veto Ceremony',vetoUsed:true,lines:[`${displayName(winner)} uses the Power of Veto on ${displayName(saved)}.`,replacement?`${displayName(hoh)} names ${displayName(replacement)} as the replacement nominee.`:`No replacement nominee is required.`]});
+        return;
+      }
+    }
     log(s,{week,phase:'standard',type:'veto-ceremony',hohId:hoh.id,winnerId:winner.id,vetoUsed:false,savedId:null,replacementId:null,title:'Veto Ceremony',lines:[`${displayName(winner)} does not use the Power of Veto.`]});
   }
   function treeOfTemptation(s,week){
@@ -282,12 +322,49 @@
     s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.evictionVotes=[];s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;return ev;
   }
   function battleBack(s){
-    const eligible=s.evicted.map(id=>hg(s,id)).filter(h=>h).slice(0,4);if(eligible.length<4)return;
-    let round1=C().runCompetition(eligible,{week:4,type:'battleback-1'});const ranking=round1.ranking;const finalists=ranking.slice(0,2).map(x=>hg(s,x.id));log(s,{week:4,phase:'battle-back',type:'battleback-1',participants:eligible.map(h=>h.id),advancers:finalists.map(h=>h.id),competition:round1,title:'Battle Back Showdown — Round 1',lines:[`${finalists.map(displayName).join(' and ')} advance to Round 2.`]});
-    const round2=C().runCompetition(finalists,{week:4,type:'battleback-2'});const challenger=round2.winner;const loser=finalists.find(h=>h.id!==challenger.id);log(s,{week:4,phase:'battle-back',type:'battleback-2',participants:finalists.map(h=>h.id),winnerId:challenger.id,competition:round2,title:'Battle Back Showdown — Round 2',lines:[`${displayName(challenger)} advances to the final Battle Back round.`,`${displayName(loser)} is eliminated from the Battle Back.`]});
-    const active=living(s);const houseChallenger=C().runCompetition(active,{week:4,type:'battleback-3'}).winner;const final=C().runCompetition([challenger,houseChallenger],{week:4,type:'battleback-3'});log(s,{week:4,phase:'battle-back',type:'battleback-3',participants:[challenger.id,houseChallenger.id],winnerId:final.winner.id,competition:final,title:'Battle Back Showdown — Final Round',lines:[`${displayName(final.winner)} wins the final Battle Back round.`]});
-    if(final.winner.id===challenger.id){challenger.active=true;challenger.evicted=false;challenger.placement=null;challenger.juryMember=false;s.jury=s.jury.filter(id=>id!==challenger.id);s.evicted=s.evicted.filter(id=>id!==challenger.id);log(s,{week:4,phase:'battle-back',type:'battleback-return',winnerId:challenger.id,title:'Battle Back — Return to the Game',lines:[`${displayName(challenger)} returns to the game.`]});return challenger;}
-    return null;
+    const eligible=s.evicted.map(id=>hg(s,id)).filter(h=>h).slice(0,4);
+    if(eligible.length<4)return null;
+    let round1=C().runCompetition(eligible,{week:4,type:'battleback-1'});
+    const ranking=round1.ranking;
+    const finalists=ranking.slice(0,2).map(x=>hg(s,x.id));
+    log(s,{week:4,phase:'battle-back',type:'battleback-1',participants:eligible.map(h=>h.id),advancers:finalists.map(h=>h.id),competition:round1,title:'Battle Back Showdown — Round 1',lines:[`${finalists.map(displayName).join(' and ')} advance to Round 2.`]});
+    let round2=C().runCompetition(finalists,{week:4,type:'battleback-2'});
+    const challenger=round2.winner;
+    const loser=finalists.find(h=>h.id!==challenger.id);
+    log(s,{week:4,phase:'battle-back',type:'battleback-2',participants:finalists.map(h=>h.id),winnerId:challenger.id,competition:round2,title:'Battle Back Showdown — Round 2',lines:[`${displayName(challenger)} wins Round 2 and advances to the final Battle Back showdown.`,`${displayName(loser)} is eliminated from the Battle Back.`]});
+
+    // The active Houseguests vote to choose the house challenger who will face
+    // the Battle Back winner. Record every vote so the event screen can show
+    // exactly who voted for whom.
+    const houseCandidates=shuffle(living(s));
+    if(!houseCandidates.length)return null;
+    const voteRecords=[];const voteCounts={};
+    houseCandidates.forEach(h=>voteCounts[h.id]=0);
+    living(s).forEach(voter=>{
+      const scored=houseCandidates.map(candidate=>{
+        const r=rel(s,voter,candidate);
+        let score=bond(s,voter,candidate)+Number(r.friendship||50)*.10+Number(r.trust||50)*.08+Number(r.loyalty||50)*.06-Number(r.rivalry||0)*.20;
+        score+=Math.random()*20-10;
+        return {candidate,score};
+      }).sort((a,b)=>b.score-a.score);
+      const target=scored[0].candidate;
+      voteCounts[target.id]++;
+      voteRecords.push({voterId:voter.id,targetId:target.id});
+    });
+    const maxVotes=Math.max(...Object.values(voteCounts));
+    const tied=houseCandidates.filter(h=>voteCounts[h.id]===maxVotes);
+    const houseChallenger=shuffle(tied)[0];
+    log(s,{week:4,phase:'battle-back',type:'battleback-vote',participants:living(s).map(h=>h.id),candidateIds:houseCandidates.map(h=>h.id),challengerId:houseChallenger.id,voteRecords,voteCounts,title:'Battle Back Showdown — House Challenger Vote',lines:[`${displayName(houseChallenger)} is selected by the House to challenge the Battle Back winner.`,...voteRecords.map(v=>`${displayName(hg(s,v.voterId))} votes for ${displayName(hg(s,v.targetId))}.`)]});
+
+    // The returning Battle Back winner is guaranteed to defeat the House
+    // challenger. The showdown remains on the event chain, but its outcome is
+    // deterministic by the requested custom rule.
+    const final={category:'physical',label:'Maze Race',description:'The Battle Back winner faces the House-selected challenger in the final showdown.',name:'Maze Race',winner:challenger,ranking:[{id:challenger.id,score:100},{id:houseChallenger.id,score:0}],official:true,type:'battleback-3',week:4};
+    log(s,{week:4,phase:'battle-back',type:'battleback-3',participants:[challenger.id,houseChallenger.id],winnerId:challenger.id,challengerId:houseChallenger.id,battleBackWinnerId:challenger.id,competition:final,title:'Battle Back Showdown — Final Round',lines:[`${displayName(challenger)} defeats House challenger ${displayName(houseChallenger)} in the final Battle Back showdown.`,`The Battle Back winner returns to the Big Brother house.`]});
+    challenger.active=true;challenger.evicted=false;challenger.placement=null;challenger.juryMember=false;s.jury=s.jury.filter(id=>id!==challenger.id);s.evicted=s.evicted.filter(id=>id!==challenger.id);
+    log(s,{week:4,phase:'battle-back',type:'battleback-return',winnerId:challenger.id,title:'Battle Back — Return to the Game',lines:[`${displayName(challenger)} returns to the game.`]});
+    s.battleBack={winnerId:challenger.id,challengerId:houseChallenger.id,voteRecords,voteCounts};
+    return challenger;
   }
   function runFirstWeekSelfEviction(s){
     // BB19's first week also contained a self-eviction/walk. It must happen
@@ -374,7 +451,7 @@
     s.finale={winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalHohId:finalHoh.id,votes:tally,jurySize:jurors.length,prize:750000,runnerUpPrize:75000,americasFavoritePrize:50000,americasFavoriteId:afpId};s.phase='complete';log(s,{week:'Final',phase:'finale',type:'winner',winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalistIds:[winnerId,runnerId],afpId,title:`${displayName(hg(s,winnerId))} Wins Big Brother!`,lines:[`By a vote of ${tally[winnerId]}-${tally[runnerId]}, ${displayName(hg(s,winnerId))} wins Big Brother.`,`${displayName(hg(s,runnerId))} finishes as the Runner-Up.`,`America's Favorite Player: ${displayName(hg(s,afpId))}.`]});
   }
   function simulateSeason(s,config){
-    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.temptationCompetitionUnlocked=false;s.houseguests.forEach(h=>{h.active=h.slot!==17;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.selfEvicted=false;h.friendshipBracelet=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
+    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.temptationCompetitionUnlocked=false;s.houseguests.forEach(h=>{h.active=h.slot!==17;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.selfEvicted=false;h.thirdNominee=false;h.temtpNominee=false;h.friendshipBracelet=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
     runPremiere(s);let week=2,guard=0;while(living(s).length>3&&week<=18&&guard<24){runCycle(s,week,1);week++;guard++;}runFinale(s);if(window.LiveFeeds?.addToSeason)window.LiveFeeds.addToSeason(s);return s;
   }
   window.SeasonEngine={simulateSeason,displayName,ordinal};

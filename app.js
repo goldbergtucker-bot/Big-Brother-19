@@ -135,6 +135,45 @@
     </section>`;
   }
 
+  function juryVoteScreen(entry, view) {
+    const d = entry.data || {};
+    const finalistIds = d.finalistIds || entry.finalistIds || [];
+    const finalists = finalistIds.map(id => byId(view, id)).filter(Boolean);
+    const votes = d.votes || entry.votes || [];
+    const fallbackFinalists = finalists.length ? finalists : (view?.houseguests || []).filter(h => h.active).slice(0,2);
+    const finalCards = fallbackFinalists.map(h => playerCard(h, "FINALIST", true)).join("");
+    const voteRows = votes.map(v => {
+      const juror = byId(view, v.voterId);
+      const target = byId(view, v.targetId);
+      if (!juror || !target) return "";
+      return `<article class="jury-vote-row">
+        <div class="jury-voter">
+          <div class="jury-vote-person-portrait">${portrait(juror,"jury-vote-portrait")}</div>
+          <div><span>JUROR</span><strong>${esc(displayName(juror))}</strong></div>
+        </div>
+        <div class="jury-vote-arrow">VOTES FOR<br><b>WINNER</b></div>
+        <div class="jury-target">
+          <div class="jury-vote-person-portrait">${portrait(target,"jury-vote-portrait")}</div>
+          <div><span>VOTED FOR</span><strong>${esc(displayName(target))}</strong></div>
+        </div>
+      </article>`;
+    }).join("");
+    return `<section class="jury-vote-screen">
+      <header class="jury-vote-screen-header">
+        <div class="jury-vote-screen-kicker">THE FINAL TWO</div>
+        <h3>FINALISTS</h3>
+        <p>These two Houseguests are competing to become the winner of Big Brother.</p>
+      </header>
+      <div class="jury-finalists jury-finalists-screen">${finalCards}</div>
+      <header class="jury-vote-screen-header jury-voting-header">
+        <div class="jury-vote-screen-kicker">JURY VOTING</div>
+        <h3>HOW THE JURY VOTED</h3>
+        <p>Each juror's vote is shown below with both Houseguest portraits.</p>
+      </header>
+      <div class="jury-vote-list">${voteRows || `<div class="jury-no-votes">No jury votes were recorded for this event.</div>`}</div>
+    </section>`;
+  }
+
   function eventData(entry, view) {
     const d = entry.data || {};
     const finalNames = entry.phase === "finale" || entry.type === "winner";
@@ -362,7 +401,7 @@
     const e=history[index], view=e.snapshot;
     eventKicker.textContent=`${weekLabel(e.week)}  •  ${(e.phase||"EVENT").replaceAll("-"," ").toUpperCase()}`;
     eventTitle.textContent=e.title;
-    eventBody.innerHTML=(e.type==="live-feed"||e.type==="live-feed-day") ? liveFeedCard(e) : `${eventData(e,view)}${eventText(e)}`;
+    eventBody.innerHTML=(e.type==="live-feed"||e.type==="live-feed-day") ? liveFeedCard(e) : ((e.type==="jury-vote"||e.type==="jury-voting") ? juryVoteScreen(e,view) : `${eventData(e,view)}${eventText(e)}`);
     eventCounter.textContent=`${index+1} / ${history.length}`;
   }
   function statusBadge(h,view){

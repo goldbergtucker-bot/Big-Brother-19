@@ -127,6 +127,8 @@
       firstTemptation: null,
       treeOfTemptation: null,
       battleBack: null,
+      finalExitOrder: [],
+      normalEvictionCount: 0,
       _bucksAwarded: false,
 
       history: [],

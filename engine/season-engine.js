@@ -190,12 +190,12 @@
   }
   function runTemptationCompetition(s,week){
     if(!s.temptationCompetitionUnlocked||week<5||week>7)return null;
-    const hoh=hg(s,s.currentHOH);const eligible=living(s).filter(h=>h.id!==hoh.id&&!h.safe&&!((h.pendantUntil||0)>=week));
+    const hoh=hg(s,s.currentHOH);const eligible=living(s).filter(h=>h.id!==hoh.id&&!h.safe&&!h.nominated&&!h.thirdNominee&&!((h.pendantUntil||0)>=week));
     const entrants=eligible.filter(h=>{const risk=(h.ratings?.strategic||50)*.35+(h.ratings?.physical||50)*.20+(h.ratings?.general||50)*.15+Math.random()*45;return risk>=60;});
     if(entrants.length<3)entrants.push(...shuffle(eligible.filter(h=>!entrants.includes(h))).slice(0,Math.min(3-entrants.length,eligible.length)));
     if(!entrants.length)return null;
     const comp=C().runCompetition(entrants,{week,type:'temptation'});const ranking=comp.ranking||[];const loserId=ranking[ranking.length-1]?.id;const winner=comp.winner;winner.safe=true;
-    let third=null;if(loserId){const loser=hg(s,loserId);if(loser&&loser.id!==winner.id){loser.nominated=true;loser.temtpNominee=true;loser.thirdNominee=true;loser.thirdNomineeSource='temptation-competition';third=loser;if(!s.nominees.includes(loser.id))s.nominees.push(loser.id);}}
+    let third=null;if(loserId){const loser=hg(s,loserId);if(loser&&loser.id!==winner.id){loser.nominated=true;loser.temtpNominee=true;loser.thirdNominee=true;loser.nominatedByHOH=false;loser.hohNominated=false;loser.thirdNomineeSource='temptation-competition';third=loser;if(!s.nominees.includes(loser.id))s.nominees.push(loser.id);}}
     log(s,{week,phase:'temptation',type:'temptation-competition',winnerId:winner.id,participants:entrants.map(h=>h.id),loserId:third?.id||null,competition:comp,title:`Temptation Competition — ${comp.label}`,lines:[`${displayName(winner)} wins the Temptation Competition and is immune for the week.`,third?`${displayName(third)} finishes last and becomes the third nominee.`:`No third nominee is created.`]});
     return {winner,third};
   }
@@ -375,11 +375,17 @@
     if(!nominees.length)return null;
     const walker=nominees[Math.floor(Math.random()*nominees.length)];
     walker.active=false; walker.selfEvicted=true; walker.nominated=false;
+    // BB19 custom placement rule: the Week 1 self-eviction is ALWAYS 16th place.
+    // It is not a normal eviction, so it must not consume or alter the normal
+    // eviction-placement sequence. The premiere eviction remains 17th.
+    walker.placement=16;
+    walker.juryMember=false;
+    s.evicted=s.evicted.filter(id=>id!==walker.id);
     s.nominees=s.nominees.filter(id=>id!==walker.id);
     log(s,{week:1,phase:"standard",type:"self-eviction",selfEvictedId:walker.id,
       title:"Self-Eviction — Houseguest Walks",
       lines:[`${displayName(walker)} chooses to self-evict from the Big Brother house.`,
-        "The self-eviction does not count as a normal eviction, does not create a jury member, and does not receive a placement."]});
+        "The self-eviction is not a normal eviction and does not create a jury member. ${displayName(walker)} is recorded in 16th place so the normal eviction placements remain correct."]});
 
     const hoh=hg(s,s.currentHOH);
     const replacementPool=living(s).filter(h=>h.id!==hoh?.id&&!s.nominees.includes(h.id)&&h.slot!==17&&!h.safe);
@@ -403,12 +409,27 @@
     log(s,{week,phase:cycle>1?'double-eviction':'standard',type:cycle>1?'hoh-de':'hoh',winnerId:hoh.id,participants:pool.map(p=>p.id),competition:comp,title:`Head of Household — ${comp.label}`,lines:[`${displayName(hoh)} wins HOH.`]});
     if(week<=3)runDenOfTemptation(s,week);
     if(week>=8&&week<=10)treeOfTemptation(s,week);
-    runNominations(s,week);
+    // BB19 Weeks 5–7: the Temptation Competition is held BEFORE the nomination ceremony.
+    // Its winner is safe before the HOH nominates anyone, and its last-place finisher
+    // is an independent third nominee. The HOH still makes exactly two nominations.
     const temptation=runTemptationCompetition(s,week);
-    // A Save-a-Friend apple, Pendant or Temptation Competition immunity can make a nominee immune.
-    s.nominees=s.nominees.filter(id=>{const h=hg(s,id);if(h?.safe||((h?.pendantUntil||0)>=week)){h.nominated=false;return false;}return true;});
-    while(s.nominees.length<2){const candidate=shuffle(living(s).filter(h=>h.id!==hoh.id&&!h.safe&&!s.nominees.includes(h.id)&&!((h.pendantUntil||0)>=week)))[0];if(!candidate)break;candidate.nominated=true;s.nominees.push(candidate.id);}
-    if(temptation?.third&&s.nominees.includes(temptation.third.id)){}
+    runNominations(s,week);
+
+    // A Save-a-Friend apple or Pendant can make a Houseguest immune. Never remove the
+    // independent Temptation third nominee here: they are not one of the HOH's two noms.
+    s.nominees=s.nominees.filter(id=>{
+      const h=hg(s,id);
+      if(h?.thirdNominee) return true;
+      if(h?.safe||((h?.pendantUntil||0)>=week)){h.nominated=false;return false;}
+      return true;
+    });
+    while(s.nominees.filter(id=>{const h=hg(s,id);return !h?.thirdNominee;}).length<2){
+      const candidate=shuffle(living(s).filter(h=>h.id!==hoh.id&&!h.safe&&!h.thirdNominee&&!s.nominees.includes(h.id)&&!((h.pendantUntil||0)>=week)))[0];
+      if(!candidate)break;
+      candidate.nominated=true;
+      s.nominees.push(candidate.id);
+    }
+    // Keep the Temptation nominee as the third nominee after the HOH's two nominations.
     const povPlayers=selectPOVPlayers(s,week);const veto=runPOV(s,week,povPlayers);applyVeto(s,week,veto.winner);
     // If a Halting Hex holder is a nominee and chooses to activate it, cancel the eviction.
     const hex=s.powers.find(p=>p.type==='halting-hex'&&!p.used&&p.ownerId&&p.expiresWeek>=week);if(hex&&s.nominees.includes(hex.ownerId)&&Math.random()<0.55){hex.used=true;log(s,{week,phase:'temptation',type:'halting-hex',winnerId:hex.ownerId,title:'Halting Hex — Eviction Cancelled',lines:[`${displayName(hg(s,hex.ownerId))} activates the Halting Hex and cancels the eviction.`,`The nominees remain in the game and the week advances.`]});s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.backdoorPlanActive=false;s.backdoorTargetId=null;return;}

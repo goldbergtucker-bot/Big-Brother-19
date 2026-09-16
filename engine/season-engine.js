@@ -10,7 +10,7 @@
   function rel(s,a,b){return s.relationships?.[a.id]?.[b.id]||{friendship:50,trust:50,loyalty:50,respect:50,rivalry:0,attraction:0};}
   function bond(s,a,b){const r=rel(s,a,b);return (r.friendship*.30+r.trust*.25+r.loyalty*.15+r.respect*.20+r.attraction*.10-r.rivalry*.35);}
   function ally(s,a,b){return (s.alliances||[]).some(x=>x.active!==false&&x.memberIds.includes(a.id)&&x.memberIds.includes(b.id));}
-  function snapshot(s){return {phase:s.phase,week:s.week,currentHOH:s.currentHOH,originalHOH:s.originalHOH,secretHOH:s.secretHOH,dethronedHOH:s.dethronedHOH,nominees:[...s.nominees],intendedTarget:s.intendedTarget,targetHistory:[...(s.targetHistory||[])],backdoorTargetId:s.backdoorTargetId||null,backdoorPlanActive:!!s.backdoorPlanActive,povPlayers:[...s.povPlayers],vetoWinners:[...s.vetoWinners],evictionVotes:[...(s.evictionVotes||[])],evicted:[...s.evicted],jury:[...s.jury],powers:(s.powers||[]).map(x=>({...x})),temptations:[...(s.temptations||[])],firstTemptation:s.firstTemptation?{...s.firstTemptation}:null,treeOfTemptation:s.treeOfTemptation?{...s.treeOfTemptation}:null,battleBack:s.battleBack?JSON.parse(JSON.stringify(s.battleBack)):null,houseguests:s.houseguests.map(h=>({id:h.id,slot:h.slot,firstName:h.firstName,lastName:h.lastName,portraitUrl:h.portraitUrl,gender:h.gender,active:h.active,safe:h.safe,nominated:h.nominated,juryMember:h.juryMember,evicted:h.evicted,selfEvicted:!!h.selfEvicted,friendshipBracelet:!!h.friendshipBracelet,placement:h.placement}))};}
+  function snapshot(s){return {phase:s.phase,week:s.week,currentHOH:s.currentHOH,originalHOH:s.originalHOH,secretHOH:s.secretHOH,dethronedHOH:s.dethronedHOH,nominees:[...s.nominees],intendedTarget:s.intendedTarget,targetHistory:[...(s.targetHistory||[])],backdoorTargetId:s.backdoorTargetId||null,backdoorPlanActive:!!s.backdoorPlanActive,povPlayers:[...s.povPlayers],vetoWinners:[...s.vetoWinners],evictionVotes:[...(s.evictionVotes||[])],evicted:[...s.evicted],jury:[...s.jury],powers:(s.powers||[]).map(x=>({...x})),temptations:[...(s.temptations||[])],firstTemptation:s.firstTemptation?{...s.firstTemptation}:null,treeOfTemptation:s.treeOfTemptation?{...s.treeOfTemptation}:null,battleBack:s.battleBack?JSON.parse(JSON.stringify(s.battleBack)):null,normalEvictionCount:s.normalEvictionCount||0,houseguests:s.houseguests.map(h=>({id:h.id,slot:h.slot,firstName:h.firstName,lastName:h.lastName,portraitUrl:h.portraitUrl,gender:h.gender,active:h.active,safe:h.safe,nominated:h.nominated,juryMember:h.juryMember,evicted:h.evicted,selfEvicted:!!h.selfEvicted,friendshipBracelet:!!h.friendshipBracelet,placement:h.placement}))};}
   function eventData(s,e){
     const d={...(e.data||{})};
     // Preserve presentation fields that are stored on the history event itself.
@@ -174,29 +174,94 @@
     return chosen;
   }
   function runNominations(s,week){
-    const hoh=hg(s,s.currentHOH);let pool=living(s).filter(h=>h.id!==hoh.id&&!h.safe&&!((h.pendantUntil||0)>=week));
-    // Nomination curse: one cursed HG must volunteer as a third nominee over the first three weeks.
+    const hoh=hg(s,s.currentHOH);
+    const existingThirdIds=(s.nominees||[]).filter(id=>hg(s,id)?.thirdNominee);
+    const existingThird=existingThirdIds.map(id=>hg(s,id)).filter(Boolean)[0]||null;
+    const pool=living(s).filter(h=>h.id!==hoh.id&&!h.safe&&!((h.pendantUntil||0)>=week)&&(!existingThird||h.id!==existingThird.id));
+
+    // The HOH ALWAYS makes exactly two nominations. A third nominee created by
+    // a twist is independent of the HOH's nominations and is preserved here.
     const cursed=week>=2 ? pool.find(h=>(h.nominationCurseUntil||0)>=week&&!h.usedNominationCurse) : null;
     const nominees=R().pickNominees(s,hoh,pool,2).filter(Boolean);
     let final=[...new Map(nominees.map(h=>[h.id,h])).values()];
-    while(final.length<2){const x=shuffle(pool.filter(h=>!final.some(n=>n.id===h.id)))[0];if(!x)break;final.push(x);}
-    if(cursed&&!final.some(h=>h.id===cursed.id)){final.push(cursed);cursed.usedNominationCurse=true;cursed.thirdNominee=true;cursed.thirdNomineeSource='nomination-curse';}
-    s.nominees=final.map(h=>h.id);final.forEach(h=>h.nominated=true);
+    while(final.length<2){
+      const x=shuffle(pool.filter(h=>!final.some(n=>n.id===h.id)))[0];
+      if(!x)break;
+      final.push(x);
+    }
+
+    let third=existingThird;
+    if(!third && cursed && !final.some(h=>h.id===cursed.id)){
+      third=cursed;
+      third.usedNominationCurse=true;
+      third.thirdNominee=true;
+      third.nominatedByHOH=false;
+      third.hohNominated=false;
+      third.thirdNomineeSource='nomination-curse';
+    }
+
+    final.forEach(h=>{
+      h.nominated=true;
+      h.nominatedByHOH=true;
+      h.hohNominated=true;
+      h.thirdNominee=false;
+    });
+    if(third){
+      third.nominated=true;
+      third.nominatedByHOH=false;
+      third.hohNominated=false;
+      third.thirdNominee=true;
+      s.nominees=[...final.map(h=>h.id),third.id];
+    }else{
+      s.nominees=final.map(h=>h.id);
+    }
+
     const targetPlan=R().planBackdoor(s,hoh,final);
-    s.backdoorPlanActive=!!targetPlan.use;s.backdoorTargetId=targetPlan.target?.id||null;
+    s.backdoorPlanActive=!!targetPlan.use;
+    s.backdoorTargetId=targetPlan.target?.id||null;
     s.intendedTarget=targetPlan.use?targetPlan.target.id:(final[0]?.id||null);
-    s.targetHistory=[];if(targetPlan.use)s.targetHistory.push({name:displayName(targetPlan.target),reason:targetPlan.reason});
-    log(s,{week,phase:'standard',type:'nominations',hohId:hoh.id,nomineeIds:s.nominees,backdoorTargetId:s.backdoorTargetId,intendedTarget:s.intendedTarget,backdoorPlanActive:s.backdoorPlanActive,title:'Nominations',lines:[`${displayName(hoh)} nominates ${final.map(displayName).join(' and ')} for eviction.`,targetPlan.use?`${displayName(hoh)} secretly plans to backdoor ${displayName(targetPlan.target)} (${targetPlan.reason}).`:`${displayName(hoh)} does not establish a backdoor plan this week.`]});
+    s.targetHistory=[];
+    if(targetPlan.use)s.targetHistory.push({name:displayName(targetPlan.target),reason:targetPlan.reason});
+
+    const lines=[
+      `${displayName(hoh)} nominates ${final.map(displayName).join(' and ')} for eviction.`,
+      third ? `${displayName(third)} is the third nominee created by ${third.thirdNomineeSource==='temptation-competition'?'the Temptation Competition':'the Nomination Curse'}; the HOH did not nominate ${displayName(third)}.` :
+        (targetPlan.use?`${displayName(hoh)} secretly plans to backdoor ${displayName(targetPlan.target)} (${targetPlan.reason}).`:`${displayName(hoh)} does not establish a backdoor plan this week.`)
+    ];
+    if(third && targetPlan.use) lines.push(`${displayName(hoh)} secretly plans to backdoor ${displayName(targetPlan.target)} (${targetPlan.reason}).`);
+    log(s,{week,phase:'standard',type:'nominations',hohId:hoh.id,hohNomineeIds:final.map(h=>h.id),thirdNomineeId:third?.id||null,nomineeIds:s.nominees,backdoorTargetId:s.backdoorTargetId,intendedTarget:s.intendedTarget,backdoorPlanActive:s.backdoorPlanActive,title:'Nominations',lines});
   }
   function runTemptationCompetition(s,week){
     if(!s.temptationCompetitionUnlocked||week<5||week>7)return null;
-    const hoh=hg(s,s.currentHOH);const eligible=living(s).filter(h=>h.id!==hoh.id&&!h.safe&&!h.nominated&&!h.thirdNominee&&!((h.pendantUntil||0)>=week));
-    const entrants=eligible.filter(h=>{const risk=(h.ratings?.strategic||50)*.35+(h.ratings?.physical||50)*.20+(h.ratings?.general||50)*.15+Math.random()*45;return risk>=60;});
+    const hoh=hg(s,s.currentHOH);
+    const eligible=living(s).filter(h=>h.id!==hoh.id&&!h.safe&&!h.nominated&&!h.thirdNominee&&!((h.pendantUntil||0)>=week));
+    const entrants=eligible.filter(h=>{
+      const risk=(h.ratings?.strategic||50)*.35+(h.ratings?.physical||50)*.20+(h.ratings?.general||50)*.15+Math.random()*45;
+      return risk>=60;
+    });
     if(entrants.length<3)entrants.push(...shuffle(eligible.filter(h=>!entrants.includes(h))).slice(0,Math.min(3-entrants.length,eligible.length)));
     if(!entrants.length)return null;
-    const comp=C().runCompetition(entrants,{week,type:'temptation'});const ranking=comp.ranking||[];const loserId=ranking[ranking.length-1]?.id;const winner=comp.winner;winner.safe=true;
-    let third=null;if(loserId){const loser=hg(s,loserId);if(loser&&loser.id!==winner.id){loser.nominated=true;loser.temtpNominee=true;loser.thirdNominee=true;loser.nominatedByHOH=false;loser.hohNominated=false;loser.thirdNomineeSource='temptation-competition';third=loser;if(!s.nominees.includes(loser.id))s.nominees.push(loser.id);}}
-    log(s,{week,phase:'temptation',type:'temptation-competition',winnerId:winner.id,participants:entrants.map(h=>h.id),loserId:third?.id||null,competition:comp,title:`Temptation Competition — ${comp.label}`,lines:[`${displayName(winner)} wins the Temptation Competition and is immune for the week.`,third?`${displayName(third)} finishes last and becomes the third nominee.`:`No third nominee is created.`]});
+    const comp=C().runCompetition(entrants,{week,type:'temptation'});
+    const ranking=Array.isArray(comp.ranking)?comp.ranking:[];
+    const loserId=ranking.length?ranking[ranking.length-1]?.id:null;
+    const winner=comp.winner;
+    if(winner)winner.safe=true;
+    let third=null;
+    if(loserId){
+      const loser=hg(s,loserId);
+      if(loser&&(!winner||loser.id!==winner.id)){
+        loser.nominated=true;
+        loser.temtpNominee=true;
+        loser.thirdNominee=true;
+        loser.nominatedByHOH=false;
+        loser.hohNominated=false;
+        loser.thirdNomineeSource='temptation-competition';
+        third=loser;
+        // Preserve this third nominee until the nomination ceremony appends the HOH's two nominees.
+        s.nominees=[loser.id];
+      }
+    }
+    log(s,{week,phase:'temptation',type:'temptation-competition',winnerId:winner?.id||null,participants:entrants.map(h=>h.id),loserId:third?.id||null,thirdNomineeId:third?.id||null,competition:comp,title:`Temptation Competition — ${comp.label}`,lines:[winner?`${displayName(winner)} wins the Temptation Competition and is immune for the week.`:'The Temptation Competition is completed.',third?`${displayName(third)} finishes last and is the THIRD NOMINEE from the Temptation Competition. The HOH will still make two separate nominations.`:`No third nominee is created.`]});
     return {winner,third};
   }
   function selectPOVPlayers(s,week){
@@ -316,7 +381,13 @@
       evictedId=hoh ? R().decideTieBreak(s,hoh,top[0],top[1]) : shuffle(top)[0].id;
       tieBreakVoteId=hoh ? evictedId : null;
     }
-    const ev=hg(s,evictedId);ev.active=false;ev.evicted=true;ev.placement=living(s).length+1;s.evicted.push(ev.id);if(ev.placement<=window.BB19_CONFIG.juryThresholdPlacement&&!s.jury.includes(ev.id)){ev.juryMember=true;s.jury.push(ev.id);}
+    const ev=hg(s,evictedId);ev.active=false;ev.evicted=true;
+    // Placement is based on the normal eviction sequence, not the current active
+    // count, because a Battle Back return must not change the placement numbers.
+    if(!Number.isFinite(s.normalEvictionCount)) s.normalEvictionCount=0;
+    ev.placement=(s.normalEvictionCount===0)?17:(16-s.normalEvictionCount);
+    s.normalEvictionCount++;
+    s.evicted.push(ev.id);if(ev.placement<=window.BB19_CONFIG.juryThresholdPlacement&&!s.jury.includes(ev.id)){ev.juryMember=true;s.jury.push(ev.id);}
     const countText=Object.entries(counts).map(([id,n])=>`${displayName(hg(s,id))}: ${n}`).join(' • ');
     log(s,{week,phase:cycle>1?'double-eviction':(cycle===0?'premiere':'standard'),type:'eviction',evictedId:ev.id,nomineeIds:noms.map(n=>n.id),votes,voteCounts:counts,evictedVoteCount:counts[ev.id],tieBreakVoteId,title:'Eviction',lines:[tieBreakVoteId?`${displayName(ev)} is evicted after a tie-breaker.`:`${displayName(ev)} is evicted.`,noms.length===2?`By a vote of ${counts[noms[0].id]} to ${counts[noms[1].id]}, ${displayName(ev)} is evicted.`:`Vote count: ${countText}`,ev.juryMember?`${displayName(ev)} joins the jury.`:`${displayName(ev)} finishes in ${ordinal(ev.placement)} place.`]});
     s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.evictionVotes=[];s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;return ev;
@@ -472,7 +543,7 @@
     s.finale={winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalHohId:finalHoh.id,votes:tally,jurySize:jurors.length,prize:750000,runnerUpPrize:75000,americasFavoritePrize:50000,americasFavoriteId:afpId};s.phase='complete';log(s,{week:'Final',phase:'finale',type:'winner',winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalistIds:[winnerId,runnerId],afpId,title:`${displayName(hg(s,winnerId))} Wins Big Brother!`,lines:[`By a vote of ${tally[winnerId]}-${tally[runnerId]}, ${displayName(hg(s,winnerId))} wins Big Brother.`,`${displayName(hg(s,runnerId))} finishes as the Runner-Up.`,`America's Favorite Player: ${displayName(hg(s,afpId))}.`]});
   }
   function simulateSeason(s,config){
-    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.temptationCompetitionUnlocked=false;s.houseguests.forEach(h=>{h.active=h.slot!==17;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.selfEvicted=false;h.thirdNominee=false;h.temtpNominee=false;h.friendshipBracelet=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
+    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.normalEvictionCount=0;s.temptationCompetitionUnlocked=false;s.houseguests.forEach(h=>{h.active=h.slot!==17;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.selfEvicted=false;h.thirdNominee=false;h.temtpNominee=false;h.friendshipBracelet=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
     runPremiere(s);let week=2,guard=0;while(living(s).length>3&&week<=18&&guard<24){runCycle(s,week,1);week++;guard++;}runFinale(s);if(window.LiveFeeds?.addToSeason)window.LiveFeeds.addToSeason(s);return s;
   }
   window.SeasonEngine={simulateSeason,displayName,ordinal};

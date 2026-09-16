@@ -342,3 +342,171 @@ button,input,select,textarea { box-sizing:border-box; max-width:100%; }
         font-size: 15px;
     }
 }
+
+/* =========================================================
+   SEASON RESULTS MODE — SHOW RESULTS AS THE MAIN PAGE
+   Prevents the event panel, event rail, and memory wall from
+   remaining underneath the Season Results tab.
+   ========================================================= */
+.season-results-mode .sim-layout {
+    display: block !important;
+}
+
+.season-results-mode .left-rail,
+.season-results-mode .right-rail,
+.season-results-mode .event-panel,
+.season-results-mode .navigator {
+    display: none !important;
+}
+
+.season-results-mode .main-stage {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.season-results-mode .view-tabs {
+    margin-bottom: 16px;
+}
+
+.season-results-mode .tab-content {
+    width: 100%;
+    min-width: 0;
+}
+
+.season-results-page {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 24px;
+    overflow: visible;
+}
+
+.overall-results {
+    text-align: center;
+    margin: 0 auto 34px;
+}
+
+.overall-results-heading > span {
+    display: block;
+    color: var(--gold);
+    font-size: 10px;
+    font-weight: 950;
+    letter-spacing: 2px;
+}
+
+.overall-results-heading h2 {
+    margin: 5px 0 22px;
+    font-size: 30px;
+}
+
+.overall-results-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(180px, 240px));
+    justify-content: center;
+    gap: 24px;
+}
+
+.overall-result-card {
+    text-align: center;
+    min-width: 0;
+}
+
+.overall-result-portrait,
+.overall-result-card .placeholder-portrait {
+    display: block;
+    width: 180px;
+    height: 210px;
+    object-fit: cover;
+    margin: 0 auto 10px;
+    border: 1px solid #080808;
+    border-radius: 0;
+    background: #2bb8e7;
+}
+
+.overall-result-card .placeholder-portrait {
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-size: 42px;
+    font-weight: 900;
+}
+
+.overall-result-label {
+    color: var(--gold);
+    font-size: 12px;
+    font-weight: 950;
+    letter-spacing: 1.2px;
+    margin-bottom: 3px;
+}
+
+.overall-result-card strong {
+    display: block;
+    color: var(--text);
+    font-size: 20px;
+    line-height: 1.15;
+}
+
+.overall-result-card > span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.final-placements-results {
+    border-top: 1px solid var(--line);
+    padding-top: 28px;
+}
+
+.final-placements-results > h2 {
+    text-align: center;
+    margin: 0 0 24px;
+    font-size: 28px;
+}
+
+.season-results-mode .final-placements-grid {
+    max-width: 1160px;
+    margin: 0 auto;
+}
+
+@media (max-width: 760px) {
+    .season-results-page {
+        padding: 14px;
+    }
+
+    .overall-results-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .overall-result-portrait,
+    .overall-result-card .placeholder-portrait {
+        width: 100%;
+        max-width: 150px;
+        height: auto;
+        aspect-ratio: 0.86;
+    }
+
+    .overall-result-card strong {
+        font-size: 15px;
+    }
+
+    .overall-result-label {
+        font-size: 9px;
+        letter-spacing: .7px;
+    }
+}
+
+@media (max-width: 480px) {
+    .overall-results-grid {
+        grid-template-columns: 1fr;
+        max-width: 220px;
+        margin: 0 auto;
+    }
+
+    .overall-result-portrait,
+    .overall-result-card .placeholder-portrait {
+        max-width: 180px;
+    }
+}

@@ -220,7 +220,7 @@
     }
     if (entry.type === "self-eviction") {
       const walker=byId(view,d.selfEvictedId);
-      body += `<div class="eviction-result self-eviction-result">${walker ? card(walker,"SELF-EVICTED") : ""}<div class="eviction-vote-count"><strong>${esc(displayName(walker))}</strong> has chosen to leave the Big Brother house. This is a walk, not a normal eviction, so no placement or jury status is assigned.</div></div>`;
+      body += `<div class="eviction-result self-eviction-result">${walker ? card(walker,"SELF-EVICTED") : ""}<div class="eviction-vote-count"><strong>${esc(displayName(walker))}</strong> has chosen to leave the Big Brother house. This is a walk, not a normal eviction. The self-evicted Houseguest is permanently recorded in 16th place and is not a jury member.</div></div>`;
       return body;
     }
     if (entry.type === "battleback-vote") {

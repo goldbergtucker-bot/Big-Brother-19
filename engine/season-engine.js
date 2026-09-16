@@ -10,7 +10,7 @@
   function rel(s,a,b){return s.relationships?.[a.id]?.[b.id]||{friendship:50,trust:50,loyalty:50,respect:50,rivalry:0,attraction:0};}
   function bond(s,a,b){const r=rel(s,a,b);return (r.friendship*.30+r.trust*.25+r.loyalty*.15+r.respect*.20+r.attraction*.10-r.rivalry*.35);}
   function ally(s,a,b){return (s.alliances||[]).some(x=>x.active!==false&&x.memberIds.includes(a.id)&&x.memberIds.includes(b.id));}
-  function snapshot(s){return {phase:s.phase,week:s.week,currentHOH:s.currentHOH,originalHOH:s.originalHOH,secretHOH:s.secretHOH,dethronedHOH:s.dethronedHOH,nominees:[...s.nominees],intendedTarget:s.intendedTarget,targetHistory:[...(s.targetHistory||[])],backdoorTargetId:s.backdoorTargetId||null,backdoorPlanActive:!!s.backdoorPlanActive,povPlayers:[...s.povPlayers],vetoWinners:[...s.vetoWinners],evictionVotes:[...(s.evictionVotes||[])],evicted:[...s.evicted],jury:[...s.jury],powers:(s.powers||[]).map(x=>({...x})),temptations:[...(s.temptations||[])],firstTemptation:s.firstTemptation?{...s.firstTemptation}:null,treeOfTemptation:s.treeOfTemptation?{...s.treeOfTemptation}:null,battleBack:s.battleBack?JSON.parse(JSON.stringify(s.battleBack)):null,normalEvictionCount:s.normalEvictionCount||0,houseguests:s.houseguests.map(h=>({id:h.id,slot:h.slot,firstName:h.firstName,lastName:h.lastName,portraitUrl:h.portraitUrl,gender:h.gender,active:h.active,safe:h.safe,nominated:h.nominated,juryMember:h.juryMember,evicted:h.evicted,selfEvicted:!!h.selfEvicted,friendshipBracelet:!!h.friendshipBracelet,placement:h.placement}))};}
+  function snapshot(s){return {phase:s.phase,week:s.week,currentHOH:s.currentHOH,originalHOH:s.originalHOH,secretHOH:s.secretHOH,dethronedHOH:s.dethronedHOH,nominees:[...s.nominees],intendedTarget:s.intendedTarget,targetHistory:[...(s.targetHistory||[])],backdoorTargetId:s.backdoorTargetId||null,backdoorPlanActive:!!s.backdoorPlanActive,povPlayers:[...s.povPlayers],vetoWinners:[...s.vetoWinners],evictionVotes:[...(s.evictionVotes||[])],evicted:[...s.evicted],jury:[...s.jury],powers:(s.powers||[]).map(x=>({...x})),temptations:[...(s.temptations||[])],firstTemptation:s.firstTemptation?{...s.firstTemptation}:null,treeOfTemptation:s.treeOfTemptation?{...s.treeOfTemptation}:null,battleBack:s.battleBack?JSON.parse(JSON.stringify(s.battleBack)):null,normalEvictionCount:s.normalEvictionCount||0,finalExitOrder:[...(s.finalExitOrder||[])],houseguests:s.houseguests.map(h=>({id:h.id,slot:h.slot,firstName:h.firstName,lastName:h.lastName,portraitUrl:h.portraitUrl,gender:h.gender,active:h.active,safe:h.safe,nominated:h.nominated,juryMember:h.juryMember,evicted:h.evicted,selfEvicted:!!h.selfEvicted,friendshipBracelet:!!h.friendshipBracelet,placement:h.placement}))};}
   function eventData(s,e){
     const d={...(e.data||{})};
     // Preserve presentation fields that are stored on the history event itself.
@@ -36,7 +36,7 @@
     return d;
   }
   function log(s,e){const r={id:s.history.length+1,...e};r.snapshot=snapshot(s);r.data=eventData(s,r);s.history.push(r);}
-  function ensureState(s){s.targetHistory=s.targetHistory||[];s.powers=s.powers||[];s.temptations=s.temptations||[];s.jury=s.jury||[];s.evicted=s.evicted||[];s.nominees=s.nominees||[];s.povPlayers=s.povPlayers||[];s.vetoWinners=s.vetoWinners||[];s.evictionVotes=s.evictionVotes||[];s.alliances=s.alliances||[];}
+  function ensureState(s){s.targetHistory=s.targetHistory||[];s.powers=s.powers||[];s.temptations=s.temptations||[];s.jury=s.jury||[];s.evicted=s.evicted||[];s.nominees=s.nominees||[];s.povPlayers=s.povPlayers||[];s.vetoWinners=s.vetoWinners||[];s.evictionVotes=s.evictionVotes||[];s.alliances=s.alliances||[];s.finalExitOrder=s.finalExitOrder||[];}
   function resetFlags(s){s.houseguests.forEach(h=>{h.safe=false;h.nominated=false;h.thirdNominee=false;h.temtpNominee=false;});}
   function chooseFirstTemptation(s){
     // BB19 premiere format: the first 16 houseguests begin the game.
@@ -345,6 +345,39 @@
     log(s,{week,phase:'temptation',type:'tree-power',winnerId:picker.id,powerId:power.id,title:`Tree of Temptation — ${power.name}`,lines:[`${displayName(picker)} takes an apple and receives ${power.name}.`,power.description]});
     return power;
   }
+  // Authoritative placement ledger. Permanent normal exits are kept in final
+  // exit order. The Week 1 self-eviction permanently occupies 16th place but
+  // is not a normal eviction. If a Battle Back winner returns, their previous
+  // exit is removed so the remaining pre-jury players are renumbered together.
+  function rebuildPlacementLedger(s){
+    const walker=s.houseguests.find(h=>h.selfEvicted);
+    const selfId=walker?.id||null;
+    const order=[];
+    (s.finalExitOrder||[]).forEach(id=>{
+      if(!id || id===selfId || order.includes(id))return;
+      const h=hg(s,id);
+      if(h && !h.active)order.push(id);
+    });
+    // Clear temporary normal-eviction placements first. The self-evicted player
+    // is the one permanent exception and always remains 16th.
+    s.houseguests.forEach(h=>{
+      if(h.id!==selfId && !h.active)h.placement=null;
+      if(h.id!==selfId && h.active)h.juryMember=false;
+    });
+    let place=17;
+    order.forEach(id=>{
+      // 16th place is permanently reserved for the Week 1 self-eviction.
+      if(place===16)place=15;
+      const h=hg(s,id);
+      if(!h)return;
+      h.placement=place;
+      h.juryMember=place<=window.BB19_CONFIG.juryThresholdPlacement;
+      place--;
+    });
+    if(walker){walker.placement=16;walker.juryMember=false;}
+    s.jury=s.houseguests.filter(h=>h.juryMember).sort((a,b)=>b.placement-a.placement).map(h=>h.id);
+    return order;
+  }
   function eviction(s,week,cycle=1){
     const noms=s.nominees.map(id=>hg(s,id)).filter(h=>h?.active);if(noms.length<2)return null;
     // The HOH never casts a regular eviction vote. The only time the HOH
@@ -382,12 +415,13 @@
       tieBreakVoteId=hoh ? evictedId : null;
     }
     const ev=hg(s,evictedId);ev.active=false;ev.evicted=true;
-    // Placement is based on the normal eviction sequence, not the current active
-    // count, because a Battle Back return must not change the placement numbers.
     if(!Number.isFinite(s.normalEvictionCount)) s.normalEvictionCount=0;
-    ev.placement=(s.normalEvictionCount===0)?17:(16-s.normalEvictionCount);
     s.normalEvictionCount++;
-    s.evicted.push(ev.id);if(ev.placement<=window.BB19_CONFIG.juryThresholdPlacement&&!s.jury.includes(ev.id)){ev.juryMember=true;s.jury.push(ev.id);}
+    if(!s.finalExitOrder.includes(ev.id))s.finalExitOrder.push(ev.id);
+    // The ledger includes the Week 1 self-eviction as a fixed 16th-place slot,
+    // while normal evictions continue through the permanent exit order.
+    rebuildPlacementLedger(s);
+    s.evicted.push(ev.id);
     const countText=Object.entries(counts).map(([id,n])=>`${displayName(hg(s,id))}: ${n}`).join(' • ');
     log(s,{week,phase:cycle>1?'double-eviction':(cycle===0?'premiere':'standard'),type:'eviction',evictedId:ev.id,nomineeIds:noms.map(n=>n.id),votes,voteCounts:counts,evictedVoteCount:counts[ev.id],tieBreakVoteId,title:'Eviction',lines:[tieBreakVoteId?`${displayName(ev)} is evicted after a tie-breaker.`:`${displayName(ev)} is evicted.`,noms.length===2?`By a vote of ${counts[noms[0].id]} to ${counts[noms[1].id]}, ${displayName(ev)} is evicted.`:`Vote count: ${countText}`,ev.juryMember?`${displayName(ev)} joins the jury.`:`${displayName(ev)} finishes in ${ordinal(ev.placement)} place.`]});
     s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.evictionVotes=[];s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;return ev;
@@ -432,8 +466,12 @@
     // deterministic by the requested custom rule.
     const final={category:'physical',label:'Maze Race',description:'The Battle Back winner faces the House-selected challenger in the final showdown.',name:'Maze Race',winner:challenger,ranking:[{id:challenger.id,score:100},{id:houseChallenger.id,score:0}],official:true,type:'battleback-3',week:4};
     log(s,{week:4,phase:'battle-back',type:'battleback-3',participants:[challenger.id,houseChallenger.id],winnerId:challenger.id,challengerId:houseChallenger.id,battleBackWinnerId:challenger.id,competition:final,title:'Battle Back Showdown — Final Round',lines:[`${displayName(challenger)} defeats House challenger ${displayName(houseChallenger)} in the final Battle Back showdown.`,`The Battle Back winner returns to the Big Brother house.`]});
-    challenger.active=true;challenger.evicted=false;challenger.placement=null;challenger.juryMember=false;s.jury=s.jury.filter(id=>id!==challenger.id);s.evicted=s.evicted.filter(id=>id!==challenger.id);
-    log(s,{week:4,phase:'battle-back',type:'battleback-return',winnerId:challenger.id,title:'Battle Back — Return to the Game',lines:[`${displayName(challenger)} returns to the game.`]});
+    const returnedPlacement=challenger.placement;
+    challenger.active=true;challenger.evicted=false;challenger.placement=null;challenger.juryMember=false;
+    s.evicted=s.evicted.filter(id=>id!==challenger.id);
+    s.finalExitOrder=s.finalExitOrder.filter(id=>id!==challenger.id);
+    rebuildPlacementLedger(s);
+    log(s,{week:4,phase:'battle-back',type:'battleback-return',winnerId:challenger.id,returnedPlacement:returnedPlacement||null,title:'Battle Back — Return to the Game',lines:[`${displayName(challenger)} returns to the game.`,`Their earlier eviction is removed from the final placement ledger, while the three losing Battle Back contenders retain their proper pre-jury order.`,`The Week 1 self-evicted Houseguest remains locked at 16th place.`]});
     s.battleBack={winnerId:challenger.id,challengerId:houseChallenger.id,voteRecords,voteCounts};
     return challenger;
   }
@@ -441,14 +479,14 @@
     // BB19's first week also contained a self-eviction/walk. It must happen
     // before the POV so the remainder of the season starts with the correct
     // active-houseguest count. The walker is not an eviction, is not a jury
-    // member, and does not receive a placement.
+    // member. It receives the fixed custom 16th-place slot, but does not count as a normal eviction.
     const nominees=s.nominees.map(id=>hg(s,id)).filter(h=>h?.active && h.slot!==17);
     if(!nominees.length)return null;
     const walker=nominees[Math.floor(Math.random()*nominees.length)];
     walker.active=false; walker.selfEvicted=true; walker.nominated=false;
     // BB19 custom placement rule: the Week 1 self-eviction is ALWAYS 16th place.
-    // It is not a normal eviction, so it must not consume or alter the normal
-    // eviction-placement sequence. The premiere eviction remains 17th.
+    // It is not a normal eviction, but its fixed 16th-place slot MUST be included
+    // in the placement ledger so Battle Back returns cannot collapse the pre-jury order.
     walker.placement=16;
     walker.juryMember=false;
     s.evicted=s.evicted.filter(id=>id!==walker.id);
@@ -456,7 +494,7 @@
     log(s,{week:1,phase:"standard",type:"self-eviction",selfEvictedId:walker.id,
       title:"Self-Eviction — Houseguest Walks",
       lines:[`${displayName(walker)} chooses to self-evict from the Big Brother house.`,
-        "The self-eviction is not a normal eviction and does not create a jury member. ${displayName(walker)} is recorded in 16th place so the normal eviction placements remain correct."]});
+        `${displayName(walker)} is permanently recorded in 16th place. This walk does not count as a normal eviction and does not create a jury member.`]});
 
     const hoh=hg(s,s.currentHOH);
     const replacementPool=living(s).filter(h=>h.id!==hoh?.id&&!s.nominees.includes(h.id)&&h.slot!==17&&!h.safe);
@@ -543,7 +581,7 @@
     s.finale={winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalHohId:finalHoh.id,votes:tally,jurySize:jurors.length,prize:750000,runnerUpPrize:75000,americasFavoritePrize:50000,americasFavoriteId:afpId};s.phase='complete';log(s,{week:'Final',phase:'finale',type:'winner',winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalistIds:[winnerId,runnerId],afpId,title:`${displayName(hg(s,winnerId))} Wins Big Brother!`,lines:[`By a vote of ${tally[winnerId]}-${tally[runnerId]}, ${displayName(hg(s,winnerId))} wins Big Brother.`,`${displayName(hg(s,runnerId))} finishes as the Runner-Up.`,`America's Favorite Player: ${displayName(hg(s,afpId))}.`]});
   }
   function simulateSeason(s,config){
-    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.normalEvictionCount=0;s.temptationCompetitionUnlocked=false;s.houseguests.forEach(h=>{h.active=h.slot!==17;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.selfEvicted=false;h.thirdNominee=false;h.temtpNominee=false;h.friendshipBracelet=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
+    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.normalEvictionCount=0;s.finalExitOrder=[];s.temptationCompetitionUnlocked=false;s.houseguests.forEach(h=>{h.active=h.slot!==17;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.selfEvicted=false;h.thirdNominee=false;h.temtpNominee=false;h.friendshipBracelet=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
     runPremiere(s);let week=2,guard=0;while(living(s).length>3&&week<=18&&guard<24){runCycle(s,week,1);week++;guard++;}runFinale(s);if(window.LiveFeeds?.addToSeason)window.LiveFeeds.addToSeason(s);return s;
   }
   window.SeasonEngine={simulateSeason,displayName,ordinal};

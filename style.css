@@ -103,3 +103,45 @@
 .jury-vote-arrow{text-align:center;font-size:8px;font-weight:950;color:#8e9ab0;letter-spacing:1px;line-height:1.35}
 .jury-vote-arrow b{color:#f3c65a;font-size:10px}
 @media(max-width:800px){.jury-finalists{gap:10px;padding:12px}.jury-finalists .player-card{width:145px}.jury-finalists .portrait-box{height:180px}.jury-vote-row{grid-template-columns:1fr;justify-items:center;text-align:center}.jury-voter,.jury-target{width:100%;justify-content:center}.jury-vote-arrow{order:2}.jury-target{order:3}.jury-voter{order:1}}
+
+/* BB19 MOBILE RESPONSIVE PASS */
+html, body { max-width:100%; overflow-x:hidden; }
+img { max-width:100%; }
+button,input,select,textarea { box-sizing:border-box; max-width:100%; }
+
+@media (max-width:900px){
+  .game-columns,.main-columns,.content-columns { grid-template-columns:1fr !important; }
+  .game-columns > *, .main-columns > *, .content-columns > * { min-width:0 !important; }
+  .controls,.toolbar,.button-row,.action-row { flex-wrap:wrap !important; }
+  button { min-height:44px; }
+}
+
+@media (max-width:768px){
+  body { font-size:15px; }
+  .container,.app,.page,.shell,.simulator,.main,.content { width:100% !important; max-width:100% !important; box-sizing:border-box; }
+  .game-columns { display:flex !important; flex-direction:column !important; gap:14px !important; }
+  .game-columns > section,.game-columns > div { width:100% !important; min-width:0 !important; }
+  .status-row,.status-grid,.stats-grid,.settings-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+  .houseguest-grid,.hg-grid,.memory-wall,.memory-wall-grid,.cast-grid,.relationship-grid,.alliance-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+  .event-chain,.event-list,.chain,.event-card,.event-panel,.event-box,.result-card,.jury-card { width:100%; min-width:0; box-sizing:border-box; }
+  .final-two,.finalists { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+  .jury-grid { grid-template-columns:1fr !important; }
+  table { display:block; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  input,select,textarea,button { font-size:16px; }
+}
+
+@media (max-width:520px){
+  body { font-size:14px; }
+  .final-two,.finalists { grid-template-columns:1fr !important; }
+  .controls,.toolbar,.button-row,.action-row { display:flex !important; flex-direction:column !important; align-items:stretch !important; width:100%; gap:8px !important; }
+  .controls button,.toolbar button,.button-row button,.action-row button,button { width:100%; margin-left:0 !important; margin-right:0 !important; }
+  .form-row,.field-row,.input-row { display:flex !important; flex-direction:column !important; width:100%; }
+  .form-row > *,.field-row > *,.input-row > * { width:100% !important; min-width:0 !important; }
+  .event-card,.event-panel,.event-box { padding:12px !important; }
+  .event-card .portraits,.event-panel .portraits,.event-box .portraits,.nominees,.pov-players,.hoh-section,.veto-section { flex-wrap:wrap !important; justify-content:center; }
+  .jury-vote,.jury-vote-row,.vote-row { display:grid !important; grid-template-columns:64px minmax(0,1fr) !important; gap:10px !important; align-items:center; }
+}
+
+@media (max-width:360px){
+  .houseguest-grid,.hg-grid,.memory-wall,.memory-wall-grid,.cast-grid,.relationship-grid,.alliance-grid,.status-row,.status-grid,.stats-grid,.settings-grid { grid-template-columns:1fr !important; }
+}

@@ -223,6 +223,12 @@
       body += `<div class="eviction-result self-eviction-result">${walker ? card(walker,"SELF-EVICTED") : ""}<div class="eviction-vote-count"><strong>${esc(displayName(walker))}</strong> has chosen to leave the Big Brother house. This is a walk, not a normal eviction, so no placement or jury status is assigned.</div></div>`;
       return body;
     }
+    if (entry.type === "battleback-vote") {
+      const records = d.voteRecords || [];
+      const challenger = byId(view, d.challengerId);
+      body += `<div class="battleback-vote-result"><div class="hero-players">${challenger ? card(challenger,"HOUSE CHALLENGER") : ""}</div><div class="vote-list battleback-votes">${records.map(v=>{const voter=byId(view,v.voterId),target=byId(view,v.targetId);return `<div class="vote-row"><div class="vote-person">${portrait(voter,"vote-portrait")}<strong>${esc(displayName(voter))}</strong></div><div class="vote-arrow">VOTES FOR</div><div class="vote-person target">${portrait(target,"vote-portrait")}<strong>${esc(displayName(target))}</strong></div></div>`}).join("")}</div></div>`;
+      return body;
+    }
     if (entry.type === "eviction-voting") {
       const votes = d.votes || view?.evictionVotes || [];
       body += `<div class="vote-list">${votes.map(v=>{const voter=byId(view,v.voterId),target=byId(view,v.targetId);return `<div class="vote-row"><div class="vote-person">${portrait(voter,"vote-portrait")}<strong>${esc(displayName(voter))}</strong></div><div class="vote-arrow">VOTES TO EVICT</div><div class="vote-person target">${portrait(target,"vote-portrait")}<strong>${esc(displayName(target))}</strong></div></div>`}).join("")}</div>`;

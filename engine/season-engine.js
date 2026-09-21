@@ -318,12 +318,59 @@
           return;
         }
 
-        let pool=living(s).filter(p=>p.id!==hoh.id&&!p.safe&&!s.nominees.includes(p.id)&&p.id!==saved.id&&p.id!==winner.id&&!((p.pendantUntil||0)>=week));
+        let pool=living(s).filter(p=>p.id!==hoh.id&&!p.safe&&!s.nominees.includes(p.id)&&p.id!==saved.id&&p.id!==winner.id);
+
+        // BB19 Weeks 1–3 Pendant of Protection: the HOH can genuinely attempt
+        // to execute a backdoor on the Pendant holder. The ceremony shows the
+        // attempt, then the Pendant protects that Houseguest and the HOH must
+        // choose another eligible replacement. This mirrors the requested
+        // on-screen behavior rather than silently preventing the backdoor.
+        const pendantTarget = week <= 3 &&
+          s.backdoorPlanActive &&
+          s.backdoorTargetId &&
+          hg(s, s.backdoorTargetId)?.id === s.backdoorTargetId &&
+          ((hg(s, s.backdoorTargetId)?.pendantUntil || 0) >= week);
+
+        if (pendantTarget) {
+          const protectedTarget = hg(s, s.backdoorTargetId);
+          log(s,{
+            week, phase:'standard', type:'pendant-backdoor-save', hohId:hoh.id, winnerId:winner.id,
+            savedId:saved.id, attemptedTargetId:protectedTarget.id, vetoUsed:true,
+            title:'Veto Ceremony — Pendant of Protection Activated',
+            lines:[
+              `${displayName(winner)} uses the Power of Veto on ${displayName(saved)}.`,
+              `${displayName(hoh)} attempts to backdoor ${displayName(protectedTarget)} as the replacement nominee.`,
+              `${displayName(protectedTarget)} is protected by the Pendant of Protection and is saved from the backdoor attempt.`,
+              `${displayName(hoh)} must choose another Houseguest as the replacement nominee.`
+            ]
+          });
+          pool = pool.filter(p => p.id !== protectedTarget.id && !((p.pendantUntil || 0) >= week));
+          replacement = R().pickReplacement(s,hoh,pool,[]);
+          if(replacement){
+            replacement.nominated=true;
+            s.nominees.push(replacement.id);
+            s.targetHistory.push({name:displayName(protectedTarget),reason:'backdoor attempt blocked by Pendant of Protection'});
+            s.targetHistory.push({name:displayName(replacement),reason:'replacement after Pendant protection'});
+          }
+          log(s,{
+            week, phase:'standard', type:'veto-ceremony', hohId:hoh.id, winnerId:winner.id,
+            savedId:saved.id, attemptedTargetId:protectedTarget.id, replacementId:replacement?.id||null,
+            pendantActivated:true, vetoUsed:true, title:'Veto Ceremony — Replacement Nominee', vetoUsed:true,
+            lines:[
+              replacement
+                ? `${displayName(hoh)} names ${displayName(replacement)} as the replacement nominee after the Pendant blocks the backdoor.`
+                : `${displayName(hoh)} cannot name an eligible replacement after the Pendant protection.`
+            ]
+          });
+          return;
+        }
+
         // Never allow the veto holder to become the replacement nominee.
+        pool = pool.filter(p => p.id !== winner.id);
         replacement=s.backdoorPlanActive&&s.backdoorTargetId&&pool.some(p=>p.id===s.backdoorTargetId)?hg(s,s.backdoorTargetId):R().pickReplacement(s,hoh,pool,[]);
         if(replacement){replacement.nominated=true;s.nominees.push(replacement.id);if(replacement.id===s.backdoorTargetId)s.targetHistory.push({name:displayName(replacement),reason:'backdoor replacement'});}
         if(s.backdoorTargetId&&replacement?.id===s.backdoorTargetId){s.intendedTarget=s.backdoorTargetId;}
-        log(s,{week,phase:'standard',type:'veto-ceremony',hohId:hoh.id,winnerId:winner.id,savedId:saved.id,replacementId:replacement?.id||null,vetoUsed:true,title:'Veto Ceremony',vetoUsed:true,lines:[`${displayName(winner)} uses the Power of Veto on ${displayName(saved)}.`,replacement?`${displayName(hoh)} names ${displayName(replacement)} as the replacement nominee.`:`No replacement nominee is required.`]});
+        log(s,{week,phase:'standard',type:'veto-ceremony',hohId:hoh.id,winnerId:winner.id,savedId:saved.id,replacementId:replacement?.id||null,vetoUsed:true,title:'Veto Ceremony',vetoUsed:true,lines:[`${displayName(winner)} uses the Power of Veto on ${displayName(saved)}.`,replacement?`${displayName(hoh)} names ${displayName(replacement)} as the replacement nominee${replacement.id===s.backdoorTargetId?' to execute the planned backdoor':''}.`:`No replacement nominee is required.`]});
         return;
       }
     }

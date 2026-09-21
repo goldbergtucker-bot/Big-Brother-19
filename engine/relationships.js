@@ -151,6 +151,42 @@
    * breaking down.
    */
   function pickNominees(state, hoh, eligible, count) {
+    // Strategy layer: sometimes an HOH deliberately attacks a duo instead of
+    // making two unrelated nominations. This is intentionally probabilistic so
+    // it does not happen every week. Strong mutual bonds, showmances/bromances,
+    // alliance ties, and combined competition threat make a duo more likely to
+    // be targeted together.
+    if (count === 2 && eligible.length >= 2) {
+      const pairs = [];
+      for (let i = 0; i < eligible.length; i++) {
+        for (let j = i + 1; j < eligible.length; j++) {
+          const a = eligible[i], b = eligible[j];
+          const ab = rel(state, a.id, b.id) || {};
+          const ba = rel(state, b.id, a.id) || {};
+          const mutualBond = (bondScore(state, a.id, b.id) + bondScore(state, b.id, a.id)) / 2;
+          const duoType = [ab.type, ba.type].some(t =>
+            ["Showmance", "Bromance", "Best Friends"].includes(t)
+          );
+          const sameAlliance = isAllyOf(state, a.id, b.id);
+          const duoThreat =
+            ((Number(a.ratings?.physical || 50) + Number(a.ratings?.mental || 50) + Number(a.ratings?.strategic || 50)) / 3) +
+            ((Number(b.ratings?.physical || 50) + Number(b.ratings?.mental || 50) + Number(b.ratings?.strategic || 50)) / 3);
+          const hohBond = (bondScore(state, hoh.id, a.id) + bondScore(state, hoh.id, b.id)) / 2;
+          const rivalry = ((Number(rel(state, hoh.id, a.id)?.rivalry || 0)) + (Number(rel(state, hoh.id, b.id)?.rivalry || 0))) / 2;
+          let score = mutualBond * 0.42 + duoThreat * 0.28 + (duoType ? 16 : 0) + (sameAlliance ? 12 : 0);
+          score += rivalry * 0.18 - hohBond * 0.20;
+          pairs.push({ a, b, score, duoType, sameAlliance });
+        }
+      }
+      pairs.sort((x, y) => y.score - x.score);
+      const bestPair = pairs[0];
+      const hohStrategy = Number(hoh.ratings?.strategic || 50);
+      const duoChance = 0.16 + Math.max(0, hohStrategy - 45) / 210;
+      if (bestPair && bestPair.score >= 55 && Math.random() < duoChance) {
+        return [bestPair.a, bestPair.b];
+      }
+    }
+
     const scored = eligible.map(hg => {
       const r = rel(state, hoh.id, hg.id) || {};
       const bond = bondScore(state, hoh.id, hg.id);
@@ -196,8 +232,19 @@
 
     const best = ranked[0];
     const hohStrategic = Number(hoh.ratings?.strategic || 50);
-    const threshold = 58 - (hohStrategic - 50) * 0.16;
-    const use = best.score >= threshold && Math.random() < (0.28 + Math.max(0, hohStrategic - 45) / 180);
+    const targetStrategic = Number(best.target.ratings?.strategic || 50);
+    const targetComp = (Number(best.target.ratings?.physical || 50) + Number(best.target.ratings?.mental || 50)) / 2;
+    const highThreat = targetStrategic >= 68 || targetComp >= 72;
+    const personalReason = Number(rel(state, hoh.id, best.target.id)?.rivalry || 0) >= 72;
+    const threshold = highThreat || personalReason
+      ? 54 - (hohStrategic - 50) * 0.10
+      : 68 - (hohStrategic - 50) * 0.10;
+    // A backdoor is a real strategic option, but deliberately not the default.
+    // Even a strong HOH only uses it in a minority of eligible situations.
+    const baseChance = highThreat ? 0.30 : 0.13;
+    const strategyBoost = Math.max(0, hohStrategic - 55) / 260;
+    const rivalryBoost = Number(rel(state, hoh.id, best.target.id)?.rivalry || 0) >= 75 ? 0.07 : 0;
+    const use = best.score >= threshold && Math.random() < (baseChance + strategyBoost + rivalryBoost);
     if (!use) return { use: false, target: null, reason: "HOH chooses not to pursue a backdoor" };
 
     let reason = "major strategic threat";

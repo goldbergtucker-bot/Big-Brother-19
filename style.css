@@ -510,3 +510,383 @@ button,input,select,textarea { box-sizing:border-box; max-width:100%; }
         max-width: 180px;
     }
 }
+
+/* =========================================================
+   BB19 RESPONSIVE MOBILE POLISH — iOS / ANDROID
+   Desktop styles above remain unchanged.
+   ========================================================= */
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
+}
+
+body {
+    min-width: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+button,
+select,
+input[type="button"],
+input[type="submit"] {
+    touch-action: manipulation;
+}
+
+@media (max-width: 767px) {
+    body {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .topbar {
+        min-height: 60px;
+        height: auto;
+        padding: 10px max(14px, env(safe-area-inset-left)) 10px max(14px, env(safe-area-inset-right));
+        gap: 10px;
+    }
+
+    .brand {
+        min-width: 0;
+    }
+
+    .brand > div:last-child {
+        min-width: 0;
+    }
+
+    .brand b,
+    .brand span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .app-shell main {
+        width: 100%;
+        max-width: 100%;
+        padding: 14px max(12px, env(safe-area-inset-left)) 28px max(12px, env(safe-area-inset-right));
+    }
+
+    .setup-hero,
+    .season-header {
+        padding: 18px 0;
+    }
+
+    .setup-hero h1,
+    .season-header h1 {
+        font-size: clamp(25px, 7vw, 32px);
+        overflow-wrap: anywhere;
+    }
+
+    .hero-actions,
+    .season-controls,
+    .tools {
+        width: 100%;
+    }
+
+    .hero-actions > button,
+    .season-controls > button,
+    .tools > button,
+    .tools > .import {
+        flex: 1 1 140px;
+    }
+
+    .settings-panel,
+    .tab-panel,
+    .event-panel {
+        border-radius: 12px;
+    }
+
+    .settings-panel {
+        padding: 14px;
+    }
+
+    .cast-card {
+        grid-template-columns: 76px minmax(0, 1fr);
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .setup-portrait {
+        width: 76px;
+        height: 100px;
+    }
+
+    .cast-name {
+        font-size: 14px;
+    }
+
+    .rating-grid {
+        gap: 5px;
+    }
+
+    .sim-layout {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .left-rail,
+    .right-rail,
+    .main-stage {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .left-rail {
+        height: auto;
+        max-height: 220px;
+        position: static;
+        order: 1;
+    }
+
+    .main-stage {
+        order: 2;
+    }
+
+    .right-rail {
+        order: 3;
+        position: static;
+        max-height: none;
+    }
+
+    .event-panel {
+        min-height: 420px;
+        padding: 15px;
+    }
+
+    .event-meta {
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .event-panel h2 {
+        font-size: clamp(21px, 6vw, 28px);
+        margin: 14px 0 20px;
+    }
+
+    .hero-players {
+        gap: 14px;
+    }
+
+    .player-card {
+        width: min(135px, 42vw);
+    }
+
+    .portrait-box {
+        height: auto;
+        aspect-ratio: 145 / 185;
+    }
+
+    .navigator {
+        gap: 8px;
+    }
+
+    .navigator > button {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .view-tabs {
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .view-tabs button {
+        min-width: 110px;
+        white-space: nowrap;
+    }
+
+    .tab-panel {
+        padding: 14px;
+        min-width: 0;
+    }
+
+    .memory-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .memory-portrait {
+        height: auto;
+        aspect-ratio: 1 / 1.08;
+    }
+
+    .results-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .result-card {
+        min-width: 0;
+        padding: 6px;
+    }
+
+    .result-portrait {
+        height: auto;
+        aspect-ratio: .78;
+    }
+
+    .vote-list,
+    .jury-vote-list {
+        width: 100%;
+    }
+
+    .vote-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 10px;
+        text-align: center;
+    }
+
+    .vote-person,
+    .vote-person.target {
+        justify-content: center;
+        width: 100%;
+    }
+
+    .vote-arrow {
+        padding: 2px 0;
+    }
+
+    .alliance-create-detailed,
+    .alliance-create {
+        width: 100%;
+    }
+
+    .member-picker {
+        max-height: 260px;
+    }
+
+    .jury-finalists-screen .player-card,
+    .jury-finalists .player-card {
+        width: min(145px, 40vw);
+    }
+
+    .final-placements-grid {
+        width: 100%;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        column-gap: 10px;
+        row-gap: 22px;
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+
+    .final-placement-card,
+    .final-placement-portrait {
+        width: 100%;
+        max-width: 150px;
+    }
+
+    .final-placement-portrait {
+        height: auto;
+        aspect-ratio: 1 / 1;
+    }
+}
+
+@media (max-width: 480px) {
+    .topbar {
+        align-items: flex-start;
+    }
+
+    .brand-mark {
+        width: 34px;
+        height: 34px;
+        flex: 0 0 34px;
+    }
+
+    .cast-grid,
+    .teams-grid,
+    .settings-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cast-card {
+        grid-template-columns: 70px minmax(0, 1fr);
+    }
+
+    .setup-portrait {
+        width: 70px;
+        height: 94px;
+    }
+
+    .memory-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .results-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .hero-players {
+        gap: 10px;
+    }
+
+    .player-card {
+        width: 42vw;
+        max-width: 135px;
+    }
+
+    .portrait-box {
+        aspect-ratio: 0.78;
+    }
+
+    .jury-finalists,
+    .jury-finalists-screen {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .final-placements-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 12px;
+        row-gap: 24px;
+    }
+
+    .final-placement-card,
+    .final-placement-portrait {
+        max-width: 165px;
+    }
+}
+
+@media (max-width: 360px) {
+    .app-shell main {
+        padding-left: 9px;
+        padding-right: 9px;
+    }
+
+    .event-panel,
+    .tab-panel,
+    .settings-panel {
+        padding: 11px;
+    }
+
+    .memory-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .results-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .player-card {
+        width: 44vw;
+    }
+}
+
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 900px) {
+    .topbar {
+        position: relative;
+    }
+
+    .left-rail {
+        max-height: 150px;
+    }
+
+    .event-panel {
+        min-height: 360px;
+    }
+
+    .portrait-box {
+        max-height: 150px;
+    }
+}

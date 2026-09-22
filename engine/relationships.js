@@ -241,10 +241,18 @@
       : 68 - (hohStrategic - 50) * 0.10;
     // A backdoor is a real strategic option, but deliberately not the default.
     // Even a strong HOH only uses it in a minority of eligible situations.
-    const baseChance = highThreat ? 0.30 : 0.13;
-    const strategyBoost = Math.max(0, hohStrategic - 55) / 260;
-    const rivalryBoost = Number(rel(state, hoh.id, best.target.id)?.rivalry || 0) >= 75 ? 0.07 : 0;
-    const use = best.score >= threshold && Math.random() < (baseChance + strategyBoost + rivalryBoost);
+    const baseChance = highThreat ? 0.40 : 0.18;
+    const strategyBoost = Math.max(0, hohStrategic - 55) / 180;
+    const rivalryBoost = Number(rel(state, hoh.id, best.target.id)?.rivalry || 0) >= 75 ? 0.09 : 0;
+
+    // Keep backdoors strategic rather than universal, but make sure a season
+    // cannot accidentally go all the way through without ever using one.
+    // Once the first few regular weeks have passed, an eligible high-threat
+    // situation becomes the simulator's fallback backdoor opportunity.
+    const alreadyPlanned = Number(state.backdoorPlanCount || 0);
+    const forceOpportunity = alreadyPlanned === 0 && Number(state.week || 1) >= 3 &&
+      (highThreat || personalReason) && best.score >= Math.max(48, threshold - 8);
+    const use = best.score >= threshold && (Math.random() < Math.min(0.72, baseChance + strategyBoost + rivalryBoost) || forceOpportunity);
     if (!use) return { use: false, target: null, reason: "HOH chooses not to pursue a backdoor" };
 
     let reason = "major strategic threat";

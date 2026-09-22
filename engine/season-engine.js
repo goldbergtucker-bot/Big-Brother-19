@@ -595,8 +595,38 @@
     }
     // Keep the Temptation nominee as the third nominee after the HOH's two nominations.
     const povPlayers=selectPOVPlayers(s,week);const veto=runPOV(s,week,povPlayers);applyVeto(s,week,veto.winner);
-    // If a Halting Hex holder is a nominee and chooses to activate it, cancel the eviction.
-    const hex=s.powers.find(p=>p.type==='halting-hex'&&!p.used&&p.ownerId&&p.expiresWeek>=week);if(hex&&s.nominees.includes(hex.ownerId)&&Math.random()<0.55){hex.used=true;log(s,{week,phase:'temptation',type:'halting-hex',winnerId:hex.ownerId,title:'Halting Hex — Eviction Cancelled',lines:[`${displayName(hg(s,hex.ownerId))} activates the Halting Hex and cancels the eviction.`,`The nominees remain in the game and the week advances.`]});s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.backdoorPlanActive=false;s.backdoorTargetId=null;return;}
+    // BB19 Halting Hex: if its holder reaches eviction night as a nominee, the
+    // Hex is ALWAYS activated. There is no voluntary/random-use roll here: the
+    // entire purpose of the power is to stop an eviction when its holder is on
+    // the block. The power is valid through its stated expiration week.
+    const hex=s.powers.find(p=>p.type==='halting-hex'&&!p.used&&p.ownerId&&p.expiresWeek>=week);
+    if(hex && s.nominees.includes(hex.ownerId)){
+      const holder=hg(s,hex.ownerId);
+      hex.used=true;
+      log(s,{
+        week,
+        phase:'temptation',
+        type:'halting-hex',
+        winnerId:hex.ownerId,
+        nomineeIds:[...s.nominees],
+        title:'Halting Hex — Eviction Cancelled',
+        lines:[
+          `${displayName(holder)} is on the block on eviction night.`,
+          `${displayName(holder)} activates the Halting Hex.`,
+          `The Halting Hex cancels this eviction, so no Houseguest is evicted this week.`,
+          `The Halting Hex has now been used and cannot be used again.`
+        ]
+      });
+      s.nominees.forEach(id=>{const h=hg(s,id);if(h)h.nominated=false;});
+      s.nominees=[];
+      s.povPlayers=[];
+      s.vetoWinners=[];
+      s.evictionVotes=[];
+      s.backdoorPlanActive=false;
+      s.backdoorTargetId=null;
+      s.intendedTarget=null;
+      return;
+    }
     const ev=eviction(s,week,cycle);if(ev?.bounty){ }
     if(s.evicted.length===4&&!s.battleBackPlayed){s.battleBackPlayed=true;battleBack(s);}
     if(week===10&&cycle===1&&living(s).length>3)runCycle(s,week,2);

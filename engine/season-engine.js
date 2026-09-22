@@ -10,7 +10,7 @@
   function rel(s,a,b){return s.relationships?.[a.id]?.[b.id]||{friendship:50,trust:50,loyalty:50,respect:50,rivalry:0,attraction:0};}
   function bond(s,a,b){const r=rel(s,a,b);return (r.friendship*.30+r.trust*.25+r.loyalty*.15+r.respect*.20+r.attraction*.10-r.rivalry*.35);}
   function ally(s,a,b){return (s.alliances||[]).some(x=>x.active!==false&&x.memberIds.includes(a.id)&&x.memberIds.includes(b.id));}
-  function snapshot(s){return {phase:s.phase,week:s.week,currentHOH:s.currentHOH,originalHOH:s.originalHOH,secretHOH:s.secretHOH,dethronedHOH:s.dethronedHOH,nominees:[...s.nominees],intendedTarget:s.intendedTarget,targetHistory:[...(s.targetHistory||[])],backdoorTargetId:s.backdoorTargetId||null,backdoorPlanActive:!!s.backdoorPlanActive,povPlayers:[...s.povPlayers],vetoWinners:[...s.vetoWinners],evictionVotes:[...(s.evictionVotes||[])],evicted:[...s.evicted],jury:[...s.jury],powers:(s.powers||[]).map(x=>({...x})),temptations:[...(s.temptations||[])],firstTemptation:s.firstTemptation?{...s.firstTemptation}:null,treeOfTemptation:s.treeOfTemptation?{...s.treeOfTemptation}:null,battleBack:s.battleBack?JSON.parse(JSON.stringify(s.battleBack)):null,normalEvictionCount:s.normalEvictionCount||0,finalExitOrder:[...(s.finalExitOrder||[])],houseguests:s.houseguests.map(h=>({id:h.id,slot:h.slot,firstName:h.firstName,lastName:h.lastName,portraitUrl:h.portraitUrl,gender:h.gender,active:h.active,safe:h.safe,nominated:h.nominated,juryMember:h.juryMember,evicted:h.evicted,selfEvicted:!!h.selfEvicted,friendshipBracelet:!!h.friendshipBracelet,placement:h.placement}))};}
+  function snapshot(s){return {phase:s.phase,week:s.week,currentHOH:s.currentHOH,originalHOH:s.originalHOH,secretHOH:s.secretHOH,dethronedHOH:s.dethronedHOH,nominees:[...s.nominees],intendedTarget:s.intendedTarget,targetHistory:[...(s.targetHistory||[])],backdoorTargetId:s.backdoorTargetId||null,backdoorPlanActive:!!s.backdoorPlanActive,backdoorPlanCount:s.backdoorPlanCount||0,povPlayers:[...s.povPlayers],vetoWinners:[...s.vetoWinners],evictionVotes:[...(s.evictionVotes||[])],evicted:[...s.evicted],jury:[...s.jury],powers:(s.powers||[]).map(x=>({...x})),temptations:[...(s.temptations||[])],firstTemptation:s.firstTemptation?{...s.firstTemptation}:null,treeOfTemptation:s.treeOfTemptation?{...s.treeOfTemptation}:null,battleBack:s.battleBack?JSON.parse(JSON.stringify(s.battleBack)):null,normalEvictionCount:s.normalEvictionCount||0,finalExitOrder:[...(s.finalExitOrder||[])],houseguests:s.houseguests.map(h=>({id:h.id,slot:h.slot,firstName:h.firstName,lastName:h.lastName,portraitUrl:h.portraitUrl,gender:h.gender,active:h.active,safe:h.safe,nominated:h.nominated,juryMember:h.juryMember,evicted:h.evicted,selfEvicted:!!h.selfEvicted,friendshipBracelet:!!h.friendshipBracelet,placement:h.placement}))};}
   function eventData(s,e){
     const d={...(e.data||{})};
     // Preserve presentation fields that are stored on the history event itself.
@@ -218,6 +218,7 @@
 
     const targetPlan=R().planBackdoor(s,hoh,final);
     s.backdoorPlanActive=!!targetPlan.use;
+    if(s.backdoorPlanActive)s.backdoorPlanCount=(s.backdoorPlanCount||0)+1;
     s.backdoorTargetId=targetPlan.target?.id||null;
     s.intendedTarget=targetPlan.use?targetPlan.target.id:(final[0]?.id||null);
     s.targetHistory=[];
@@ -295,7 +296,22 @@
   function chooseVetoUse(s,week,winner){
     const nominees=s.nominees.map(id=>hg(s,id)).filter(Boolean);const hoh=hg(s,s.currentHOH);if(nominees.some(n=>n.id===winner.id))return {use:true,saveId:winner.id,reason:'self-save'};
     // Critical BB19 behavior: a HOH may use the veto on a pawn to execute a planned backdoor.
-    if(winner.id===hoh.id&&s.backdoorPlanActive&&s.backdoorTargetId&&hg(s,s.backdoorTargetId)?.active)return {use:true,saveId:nominees.slice().sort((a,b)=>{const ra=rel(s,hoh,a),rb=rel(s,hoh,b);return (rb.trust+rb.loyalty)-(ra.trust+ra.loyalty);})[0]?.id||nominees[0]?.id,reason:'execute-backdoor'};
+    if(s.backdoorPlanActive&&s.backdoorTargetId&&hg(s,s.backdoorTargetId)?.active){
+      // A planned backdoor requires the veto to open the replacement spot.
+      // The HOH always understands this; a non-HOH veto winner can also choose
+      // to cooperate when the winner has a strong relationship with a pawn or
+      // recognizes the target as a major competition threat.
+      if(winner.id===hoh.id){
+        const save=nominees.slice().sort((a,b)=>{const ra=rel(s,hoh,a),rb=rel(s,hoh,b);return (rb.trust+rb.loyalty)-(ra.trust+ra.loyalty);})[0]?.id||nominees[0]?.id;
+        return {use:true,saveId:save,reason:'execute-backdoor'};
+      }
+      const target=hg(s,s.backdoorTargetId);
+      const targetThreat=(Number(target.ratings?.physical||50)+Number(target.ratings?.mental||50)+Number(target.ratings?.strategic||50))/3;
+      const pawn=nominees.slice().sort((a,b)=>{const ra=rel(s,winner.id,a),rb=rel(s,winner.id,b);return (rb.trust+rb.loyalty)-(ra.trust+ra.loyalty);})[0];
+      const pawnRel=Number(rel(s,winner.id,pawn.id)?.friendship||50)+Number(rel(s,winner.id,pawn.id)?.trust||50);
+      const cooperation=0.58 + Math.max(0,targetThreat-65)/220 + Math.max(0,pawnRel-110)/400;
+      if(Math.random()<Math.min(0.88,cooperation)) return {use:true,saveId:pawn.id,reason:'support-planned-backdoor'};
+    }
     return R().decideVetoUse(s,winner,hoh,nominees);
   }
   function applyVeto(s,week,winner){
@@ -333,18 +349,7 @@
 
         if (pendantTarget) {
           const protectedTarget = hg(s, s.backdoorTargetId);
-          log(s,{
-            week, phase:'standard', type:'pendant-backdoor-save', hohId:hoh.id, winnerId:winner.id,
-            savedId:saved.id, attemptedTargetId:protectedTarget.id, vetoUsed:true,
-            title:'Veto Ceremony — Pendant of Protection Activated',
-            lines:[
-              `${displayName(winner)} uses the Power of Veto on ${displayName(saved)}.`,
-              `${displayName(hoh)} attempts to backdoor ${displayName(protectedTarget)} as the replacement nominee.`,
-              `${displayName(protectedTarget)} is protected by the Pendant of Protection and is saved from the backdoor attempt.`,
-              `${displayName(hoh)} must choose another Houseguest as the replacement nominee.`
-            ]
-          });
-          pool = pool.filter(p => p.id !== protectedTarget.id && !((p.pendantUntil || 0) >= week));
+          pool = pool.filter(p => p.id !== protectedTarget.id && p.id !== winner.id && !((p.pendantUntil || 0) >= week));
           replacement = R().pickReplacement(s,hoh,pool,[]);
           if(replacement){
             replacement.nominated=true;
@@ -355,8 +360,11 @@
           log(s,{
             week, phase:'standard', type:'veto-ceremony', hohId:hoh.id, winnerId:winner.id,
             savedId:saved.id, attemptedTargetId:protectedTarget.id, replacementId:replacement?.id||null,
-            pendantActivated:true, vetoUsed:true, title:'Veto Ceremony — Replacement Nominee', vetoUsed:true,
+            pendantActivated:true, vetoUsed:true, title:'Veto Ceremony — Pendant of Protection Activated', vetoUsed:true,
             lines:[
+              `${displayName(winner)} uses the Power of Veto on ${displayName(saved)}.`,
+              `${displayName(hoh)} attempts to backdoor ${displayName(protectedTarget)} as the replacement nominee.`,
+              `${displayName(protectedTarget)} is protected by the Pendant of Protection and is saved from the backdoor attempt.`,
               replacement
                 ? `${displayName(hoh)} names ${displayName(replacement)} as the replacement nominee after the Pendant blocks the backdoor.`
                 : `${displayName(hoh)} cannot name an eligible replacement after the Pendant protection.`
@@ -628,7 +636,7 @@
     s.finale={winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalHohId:finalHoh.id,votes:tally,jurySize:jurors.length,prize:750000,runnerUpPrize:75000,americasFavoritePrize:50000,americasFavoriteId:afpId};s.phase='complete';log(s,{week:'Final',phase:'finale',type:'winner',winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalistIds:[winnerId,runnerId],afpId,title:`${displayName(hg(s,winnerId))} Wins Big Brother!`,lines:[`By a vote of ${tally[winnerId]}-${tally[runnerId]}, ${displayName(hg(s,winnerId))} wins Big Brother.`,`${displayName(hg(s,runnerId))} finishes as the Runner-Up.`,`America's Favorite Player: ${displayName(hg(s,afpId))}.`]});
   }
   function simulateSeason(s,config){
-    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.normalEvictionCount=0;s.finalExitOrder=[];s.temptationCompetitionUnlocked=false;s.houseguests.forEach(h=>{h.active=h.slot!==17;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.selfEvicted=false;h.thirdNominee=false;h.temtpNominee=false;h.friendshipBracelet=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
+    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.backdoorPlanCount=0;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.normalEvictionCount=0;s.finalExitOrder=[];s.temptationCompetitionUnlocked=false;s.houseguests.forEach(h=>{h.active=h.slot!==17;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.selfEvicted=false;h.thirdNominee=false;h.temtpNominee=false;h.friendshipBracelet=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
     runPremiere(s);let week=2,guard=0;while(living(s).length>3&&week<=18&&guard<24){runCycle(s,week,1);week++;guard++;}runFinale(s);if(window.LiveFeeds?.addToSeason)window.LiveFeeds.addToSeason(s);return s;
   }
   window.SeasonEngine={simulateSeason,displayName,ordinal};

@@ -10,7 +10,7 @@
   function rel(s,a,b){return s.relationships?.[a.id]?.[b.id]||{friendship:50,trust:50,loyalty:50,respect:50,rivalry:0,attraction:0};}
   function bond(s,a,b){const r=rel(s,a,b);return (r.friendship*.30+r.trust*.25+r.loyalty*.15+r.respect*.20+r.attraction*.10-r.rivalry*.35);}
   function ally(s,a,b){return (s.alliances||[]).some(x=>x.active!==false&&x.memberIds.includes(a.id)&&x.memberIds.includes(b.id));}
-  function snapshot(s){return {phase:s.phase,week:s.week,currentHOH:s.currentHOH,originalHOH:s.originalHOH,secretHOH:s.secretHOH,dethronedHOH:s.dethronedHOH,nominees:[...s.nominees],intendedTarget:s.intendedTarget,targetHistory:[...(s.targetHistory||[])],backdoorTargetId:s.backdoorTargetId||null,backdoorPlanActive:!!s.backdoorPlanActive,backdoorPlanCount:s.backdoorPlanCount||0,povPlayers:[...s.povPlayers],vetoWinners:[...s.vetoWinners],evictionVotes:[...(s.evictionVotes||[])],evicted:[...s.evicted],jury:[...s.jury],powers:(s.powers||[]).map(x=>({...x})),temptations:[...(s.temptations||[])],firstTemptation:s.firstTemptation?{...s.firstTemptation}:null,treeOfTemptation:s.treeOfTemptation?{...s.treeOfTemptation}:null,battleBack:s.battleBack?JSON.parse(JSON.stringify(s.battleBack)):null,normalEvictionCount:s.normalEvictionCount||0,finalExitOrder:[...(s.finalExitOrder||[])],houseguests:s.houseguests.map(h=>({id:h.id,slot:h.slot,firstName:h.firstName,lastName:h.lastName,portraitUrl:h.portraitUrl,gender:h.gender,active:h.active,safe:h.safe,nominated:h.nominated,juryMember:h.juryMember,evicted:h.evicted,selfEvicted:!!h.selfEvicted,friendshipBracelet:!!h.friendshipBracelet,placement:h.placement}))};}
+  function snapshot(s){return {phase:s.phase,week:s.week,currentHOH:s.currentHOH,originalHOH:s.originalHOH,secretHOH:s.secretHOH,dethronedHOH:s.dethronedHOH,nominees:[...s.nominees],intendedTarget:s.intendedTarget,targetHistory:[...(s.targetHistory||[])],backdoorTargetId:s.backdoorTargetId||null,backdoorPlanActive:!!s.backdoorPlanActive,backdoorPlanCount:s.backdoorPlanCount||0,povPlayers:[...s.povPlayers],vetoWinners:[...s.vetoWinners],evictionVotes:[...(s.evictionVotes||[])],evicted:[...s.evicted],jury:[...s.jury],powers:(s.powers||[]).map(x=>({...x})),temptations:[...(s.temptations||[])],firstTemptation:s.firstTemptation?{...s.firstTemptation}:null,treeOfTemptation:s.treeOfTemptation?{...s.treeOfTemptation}:null,battleBack:s.battleBack?JSON.parse(JSON.stringify(s.battleBack)):null,normalEvictionCount:s.normalEvictionCount||0,haltingHexUsed:!!s.haltingHexUsed,finalExitOrder:[...(s.finalExitOrder||[])],houseguests:s.houseguests.map(h=>({id:h.id,slot:h.slot,firstName:h.firstName,lastName:h.lastName,portraitUrl:h.portraitUrl,gender:h.gender,active:h.active,safe:h.safe,nominated:h.nominated,juryMember:h.juryMember,evicted:h.evicted,selfEvicted:!!h.selfEvicted,friendshipBracelet:!!h.friendshipBracelet,placement:h.placement}))};}
   function eventData(s,e){
     const d={...(e.data||{})};
     // Preserve presentation fields that are stored on the history event itself.
@@ -292,7 +292,7 @@
     log(s,{week,phase:'standard',type:'pov-players',hohId:hoh.id,nomineeIds:[...s.nominees],povPlayers:s.povPlayers,title:'Power of Veto — Picked Players',lines:[`The Power of Veto players are ${participants.map(displayName).join(', ')}.`,`Six Houseguests compete for the Power of Veto${nominees.length>=3?' (HOH + 3 nominees + 2 picked players).':' (HOH + 2 nominees + 3 picked players).'}`]});
     return participants;
   }
-  function runPOV(s,week,participants){const comp=C().runCompetition(participants,{week,type:'pov'});const winner=comp.winner;s.vetoWinners=[winner.id];log(s,{week,phase:'standard',type:'pov',winnerId:winner.id,participants:participants.map(h=>h.id),competition:comp,title:`Power of Veto — ${comp.label}`,lines:[`${displayName(winner)} wins the Power of Veto.`]});return {winner,comp};}
+  function runPOV(s,week,participants,competitionWeek=week){const comp=C().runCompetition(participants,{week:competitionWeek,type:'pov'});const winner=comp.winner;s.vetoWinners=[winner.id];log(s,{week,phase:'standard',type:'pov',winnerId:winner.id,participants:participants.map(h=>h.id),competition:comp,title:`Power of Veto — ${comp.label}`,lines:[`${displayName(winner)} wins the Power of Veto.`]});return {winner,comp};}
   function chooseVetoUse(s,week,winner){
     const nominees=s.nominees.map(id=>hg(s,id)).filter(Boolean);const hoh=hg(s,s.currentHOH);if(nominees.some(n=>n.id===winner.id))return {use:true,saveId:winner.id,reason:'self-save'};
     // Critical BB19 behavior: a HOH may use the veto on a pawn to execute a planned backdoor.
@@ -569,14 +569,22 @@
     let hoh;
     const prev=hg(s,s.currentHOH);
     let pool=living(s).filter(h=>h.id!==prev?.id&&!h.noNextHOH);
-    const comp=C().runCompetition(pool,{week,type:cycle>1?'hoh-de':'hoh'});hoh=comp.winner;s.currentHOH=hoh.id;s.originalHOH=hoh.id;hoh.noNextHOH=false;
+    let competitionWeek=week;
+    let competitionType=cycle>1?'hoh-de':'hoh';
+    if(s.haltingHexUsed){
+      if(week===7&&cycle===2)competitionWeek=8;
+      else if(week>=8&&week<=9&&cycle===1)competitionWeek=week+1;
+      else if(week===10&&cycle===1)competitionType='hoh-de';
+      else if(week===10&&cycle===2){competitionWeek=11;competitionType='hoh';}
+    }
+    const comp=C().runCompetition(pool,{week:competitionWeek,type:competitionType});hoh=comp.winner;s.currentHOH=hoh.id;s.originalHOH=hoh.id;hoh.noNextHOH=false;
     log(s,{week,phase:cycle>1?'double-eviction':'standard',type:cycle>1?'hoh-de':'hoh',winnerId:hoh.id,participants:pool.map(p=>p.id),competition:comp,title:`Head of Household — ${comp.label}`,lines:[`${displayName(hoh)} wins HOH.`]});
     if(week<=3)runDenOfTemptation(s,week);
     if(week>=8&&week<=10)treeOfTemptation(s,week);
     // BB19 Weeks 5–7: the Temptation Competition is held BEFORE the nomination ceremony.
     // Its winner is safe before the HOH nominates anyone, and its last-place finisher
     // is an independent third nominee. The HOH still makes exactly two nominations.
-    const temptation=runTemptationCompetition(s,week);
+    const temptation=cycle===1?runTemptationCompetition(s,week):null;
     runNominations(s,week);
 
     // A Save-a-Friend apple or Pendant can make a Houseguest immune. Never remove the
@@ -594,15 +602,36 @@
       s.nominees.push(candidate.id);
     }
     // Keep the Temptation nominee as the third nominee after the HOH's two nominations.
-    const povPlayers=selectPOVPlayers(s,week);const veto=runPOV(s,week,povPlayers);applyVeto(s,week,veto.winner);
-    // BB19 Halting Hex: if its holder reaches eviction night as a nominee, the
-    // Hex is ALWAYS activated. There is no voluntary/random-use roll here: the
-    // entire purpose of the power is to stop an eviction when its holder is on
-    // the block. The power is valid through its stated expiration week.
+    const povPlayers=selectPOVPlayers(s,week);
+    let povCompetitionType=cycle>1?'pov-de':'pov';
+    if(s.haltingHexUsed&&week===10&&cycle===1)povCompetitionType='pov-de';
+    if(s.haltingHexUsed&&week===10&&cycle===2){competitionWeek=11;povCompetitionType='pov';}
+    const vetoComp=C().runCompetition(povPlayers,{week:competitionWeek,type:povCompetitionType});
+    const veto={winner:vetoComp.winner,comp:vetoComp};
+    s.vetoWinners=[veto.winner.id];
+    log(s,{week,phase:'standard',type:'pov',winnerId:veto.winner.id,participants:povPlayers.map(h=>h.id),competition:vetoComp,title:`Power of Veto — ${vetoComp.label}`,lines:[`${displayName(veto.winner)} wins the Power of Veto.`]});
+    applyVeto(s,week,veto.winner);
+    // Halting Hex is mandatory when its holder is nominated. It may also be
+    // spent to save a genuinely close ally; weaker relationships do not trigger it.
     const hex=s.powers.find(p=>p.type==='halting-hex'&&!p.used&&p.ownerId&&p.expiresWeek>=week);
-    if(hex && s.nominees.includes(hex.ownerId)){
-      const holder=hg(s,hex.ownerId);
+    const hexHolder=hex?hg(s,hex.ownerId):null;
+    const hexNominees=hex?s.nominees.map(id=>hg(s,id)).filter(Boolean):[];
+    const holderOnBlock=!!hexHolder&&hexNominees.some(n=>n.id===hexHolder.id);
+    const protectedAlly=hexHolder&&hexNominees
+      .filter(n=>n.id!==hexHolder.id)
+      .map(n=>({houseguest:n,relationship:rel(s,hexHolder,n),bond:bond(s,hexHolder,n),allied:ally(s,hexHolder,n)}))
+      .sort((a,b)=>b.bond-a.bond)[0];
+    const allyCloseEnough=!!protectedAlly&&(
+      protectedAlly.bond>=72 ||
+      (protectedAlly.allied&&protectedAlly.bond>=64&&
+       protectedAlly.relationship.friendship>=70&&protectedAlly.relationship.trust>=65)
+    );
+    const useForAlly=allyCloseEnough&&Math.random()<
+      clamp((protectedAlly.bond-58)/35,0.25,0.85);
+    if(hex&&(holderOnBlock||useForAlly)){
+      const holder=hexHolder;
       hex.used=true;
+      s.haltingHexUsed=true;
       log(s,{
         week,
         phase:'temptation',
@@ -611,7 +640,9 @@
         nomineeIds:[...s.nominees],
         title:'Halting Hex — Eviction Cancelled',
         lines:[
-          `${displayName(holder)} is on the block on eviction night.`,
+          holderOnBlock
+            ? `${displayName(holder)} is nominated on eviction night and must use the Halting Hex.`
+            : `${displayName(holder)} chooses to protect ${displayName(protectedAlly.houseguest)}, a close ally on the block.`,
           `${displayName(holder)} activates the Halting Hex.`,
           `The Halting Hex cancels this eviction, so no Houseguest is evicted this week.`,
           `The Halting Hex has now been used and cannot be used again.`
@@ -629,7 +660,7 @@
     }
     const ev=eviction(s,week,cycle);if(ev?.bounty){ }
     if(s.evicted.length===4&&!s.battleBackPlayed){s.battleBackPlayed=true;battleBack(s);}
-    if(week===10&&cycle===1&&living(s).length>3)runCycle(s,week,2);
+    if(((week===7&&cycle===1&&s.haltingHexUsed)||(week===10&&cycle===1))&&living(s).length>3)runCycle(s,week,2);
   }
   function runPremiere(s){
     s.week=1;s.phase="premiere";resetFlags(s);
@@ -666,7 +697,7 @@
     s.finale={winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalHohId:finalHoh.id,votes:tally,jurySize:jurors.length,prize:750000,runnerUpPrize:75000,americasFavoritePrize:50000,americasFavoriteId:afpId};s.phase='complete';log(s,{week:'Final',phase:'finale',type:'winner',winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalistIds:[winnerId,runnerId],afpId,title:`${displayName(hg(s,winnerId))} Wins Big Brother!`,lines:[`By a vote of ${tally[winnerId]}-${tally[runnerId]}, ${displayName(hg(s,winnerId))} wins Big Brother.`,`${displayName(hg(s,runnerId))} finishes as the Runner-Up.`,`America's Favorite Player: ${displayName(hg(s,afpId))}.`]});
   }
   function simulateSeason(s,config){
-    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.backdoorPlanCount=0;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.normalEvictionCount=0;s.finalExitOrder=[];s.temptationCompetitionUnlocked=false;s.houseguests.forEach(h=>{h.active=h.slot!==17;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.selfEvicted=false;h.thirdNominee=false;h.temtpNominee=false;h.friendshipBracelet=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
+    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.backdoorPlanCount=0;s.intendedTarget=null;s.targetHistory=[];s.powers=[];s.temptations=[];s.firstTemptation=null;s.treeOfTemptation=null;s.battleBack=null;s.battleBackPlayed=false;s.normalEvictionCount=0;s.finalExitOrder=[];s.temptationCompetitionUnlocked=false;s.haltingHexUsed=false;s.houseguests.forEach(h=>{h.active=h.slot!==17;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.selfEvicted=false;h.thirdNominee=false;h.temtpNominee=false;h.friendshipBracelet=false;h.placement=null;h.mustThrowFirstHOH=false;h.denUsed=false;h.treeUsed=false;h.pendantUntil=0;h.nominationCurseUntil=0;h.usedNominationCurse=false;h.noNextHOH=false;h.bounty=0;h.eliminateTwoVotes=false;});
     runPremiere(s);let week=2,guard=0;while(living(s).length>3&&week<=18&&guard<24){runCycle(s,week,1);week++;guard++;}runFinale(s);if(window.LiveFeeds?.addToSeason)window.LiveFeeds.addToSeason(s);return s;
   }
   window.SeasonEngine={simulateSeason,displayName,ordinal};

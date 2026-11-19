@@ -350,14 +350,27 @@
 
   /** A single juror's vote between the two finalists. */
   function decideJuryVote(state, juror, finalistA, finalistB) {
-    const bondA = bondScore(state, juror.id, finalistA.id) + relationshipBias(state, juror.id, finalistA.id);
-    const bondB = bondScore(state, juror.id, finalistB.id) + relationshipBias(state, juror.id, finalistB.id);
-    const gameA = finalistA.ratings.strategic * 0.65 + finalistA.ratings.mental * 0.35;
-    const gameB = finalistB.ratings.strategic * 0.65 + finalistB.ratings.mental * 0.35;
+    const relA=rel(state,juror.id,finalistA.id);
+    const relB=rel(state,juror.id,finalistB.id);
+    const bondA=bondScore(state,juror.id,finalistA.id)+relationshipBias(state,juror.id,finalistA.id);
+    const bondB=bondScore(state,juror.id,finalistB.id)+relationshipBias(state,juror.id,finalistB.id);
 
-    const scoreA = bondA * 0.45 + gameA * 0.55 + (Math.random() * 12 - 6);
-    const scoreB = bondB * 0.45 + gameB * 0.55 + (Math.random() * 12 - 6);
-    return scoreA >= scoreB ? finalistA.id : finalistB.id;
+    // Jury decisions are personal: a juror weighs their own relationship,
+    // respect for the game, social bonds and the finalists' overall games.
+    const gameA=(n(finalistA.ratings?.strategic)*0.35)+(n(finalistA.ratings?.social)*0.30)+
+      (n(finalistA.ratings?.mental)*0.20)+(n(finalistA.ratings?.physical)*0.15);
+    const gameB=(n(finalistB.ratings?.strategic)*0.35)+(n(finalistB.ratings?.social)*0.30)+
+      (n(finalistB.ratings?.mental)*0.20)+(n(finalistB.ratings?.physical)*0.15);
+    const juryRespectA=n(relA.respect)-n(relA.rivalry,0)*0.35;
+    const juryRespectB=n(relB.respect)-n(relB.rivalry,0)*0.35;
+    const allianceA=isAllyOf(state,juror.id,finalistA.id)?7:0;
+    const allianceB=isAllyOf(state,juror.id,finalistB.id)?7:0;
+
+    const scoreA=bondA*0.48+gameA*0.30+juryRespectA*0.12+allianceA+
+      (Math.random()*30-15);
+    const scoreB=bondB*0.48+gameB*0.30+juryRespectB*0.12+allianceB+
+      (Math.random()*30-15);
+    return scoreA>=scoreB?finalistA.id:finalistB.id;
   }
 
   window.RelEngine = {

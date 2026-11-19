@@ -7,6 +7,10 @@
     if(opts.week!=null && opts.type){
       const exact=cfg.find(c=>c.week===opts.week&&c.type===opts.type);
       if(exact)return exact;
+      // Week 7's conditional first double-eviction round uses the next
+      // scheduled regular competition (Let It Slide / Kenya Solve It).
+      if(opts.week===8&&opts.type==='hoh-de')return cfg.find(c=>c.week===8&&c.type==='hoh')||null;
+      if(opts.week===8&&opts.type==='pov-de')return cfg.find(c=>c.week===8&&c.type==='pov')||null;
     }
     return null;
   }
